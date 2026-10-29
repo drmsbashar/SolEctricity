@@ -27,4 +27,11 @@ class AppAssets {
   static const String iconInstallation = 'assets/icons/installation.svg';
   static const String iconMaintenance = 'assets/icons/maintenance.svg';
   static const String iconContact = 'assets/icons/contact.svg';
+
+  // Installation Images
+  static const String installFig1 = 'assets/images/install_fig1.png';
+  static const String installFig2 = 'assets/images/install_fig2.png';
+  static const String installFig3 = 'assets/images/install_fig3.png';
+  static const String installFig4 = 'assets/images/install_fig4.png';
+  static const String installFig5 = 'assets/images/install_fig5.png';
 }

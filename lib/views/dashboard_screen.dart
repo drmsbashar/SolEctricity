@@ -8,6 +8,7 @@ import '../widgets/fab_menu.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'maintenance_screen.dart';
+import 'installation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -310,6 +311,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => MaintenanceScreen(isBangla: isBangla),
+        ),
+      );
+      return;
+    }
+
+    // স্থাপন পেজে যাওয়া
+    if (option == 'Installation') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InstallationScreen(isBangla: isBangla),
         ),
       );
       return;
