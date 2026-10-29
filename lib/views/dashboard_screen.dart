@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'maintenance_screen.dart';
 import 'installation_screen.dart';
+import 'tools_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -302,6 +303,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (option == 'Contact') {
       _showContactDialog(context);
+      return;
+    }
+
+    // উপকরণ / Tools মেনু আইটেমসমূহ
+    if (option == 'Tools' || option == 'Compass') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ToolsScreen(isBangla: isBangla, initialIndex: 0),
+        ),
+      );
+      return;
+    }
+
+    if (option == 'Leveler') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ToolsScreen(isBangla: isBangla, initialIndex: 1),
+        ),
+      );
+      return;
+    }
+
+    if (option == 'Protractor') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ToolsScreen(isBangla: isBangla, initialIndex: 2),
+        ),
+      );
       return;
     }
 
