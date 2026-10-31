@@ -4,6 +4,7 @@ import '../models/appliance_item.dart';
 import '../models/appliance_presets.dart';
 import 'appliance_input_screen.dart';
 import 'load_summary_screen.dart';
+import 'system_parameters_screen.dart';
 
 class LoadSelectionScreen extends StatefulWidget {
   final bool isBangla;
@@ -113,7 +114,7 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 56.0,
+                    horizontal: 16.0,
                     vertical: 10.0,
                   ),
                   child: GridView.builder(
@@ -337,26 +338,42 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
                     return;
                   }
 
-                  final updatedItems = await Navigator.push<List<ApplianceItem>>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LoadSummaryScreen(
-                        items: _userItems,
-                        isBangla: _isBangla,
-                        onProceedToSizing: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                _isBangla
-                                    ? 'সিস্টেম সাইজিং ক্যালকুলেশন শুরু হচ্ছে...'
-                                    : 'Starting System Sizing Calculation...',
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
+                  final updatedItems =
+                      await Navigator.push<List<ApplianceItem>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LoadSummaryScreen(
+                            items: _userItems,
+                            isBangla: _isBangla,
+                            onProceedToSizing: () {
+                              // লোড সামারি স্ক্রিন থেকে সিস্টেম প্যারামিটার ইনপুট স্ক্রিনে যাওয়া
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => SystemParametersScreen(
+                                    dailyTotalWh: engine.sigmaLtotal,
+                                    acPeakWatt: engine.sigmaLa,
+                                    isBangla: _isBangla,
+                                    onToggleLanguage: _handleLanguageToggle,
+                                    onProceedToFinalResults: (params) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                _isBangla
+                                                    ? 'চূড়ান্ত সাইজিং হিসেব সম্পন্ন হচ্ছে...'
+                                                    : 'Calculating final sizing results...',
+                                              ),
+                                            ),
+                                          );
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      );
 
                   if (updatedItems != null) {
                     setState(() {

@@ -27,6 +27,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
+	<!-- অ্যাপ ব্যবহারের সময় লোকেশন পারমিশন -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>আপনার এলাকার সঠিক গড়পড়তা সৌর-বিকিরণ (Peak Sun Hours) নির্ধারণ করার জন্য লোকেশন প্রয়োজন।</string>
+
+	<!-- ব্যাকগ্রাউন্ড বা সার্বিক লোকেশন পারমিশন (প্রয়োজনে) -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>সৌর-শক্তি সিস্টেম সাইজিংয়ের জন্য আপনার ভৌগোলিক অবস্থান প্রয়োজন।</string>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
