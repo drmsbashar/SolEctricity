@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'maintenance_screen.dart';
 import 'installation_screen.dart';
 import 'tools_screen.dart';
+import 'about_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -335,6 +336,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         MaterialPageRoute(
           builder: (context) =>
               ToolsScreen(isBangla: isBangla, initialIndex: 2),
+        ),
+      );
+      return;
+    }
+
+    // পরিচিতি / About পেজে সম্পূর্ণ স্ক্রিন আকারে যাওয়া
+    if (option == 'About') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AboutScreen(isBangla: isBangla),
         ),
       );
       return;
