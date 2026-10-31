@@ -11,6 +11,7 @@ import 'maintenance_screen.dart';
 import 'installation_screen.dart';
 import 'tools_screen.dart';
 import 'about_screen.dart';
+import 'license_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -44,7 +45,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       drawer: AppDrawer(
         isBangla: isBangla,
         onNavigate: (route) => _navigateTo(context, route),
-        onAboutTap: () => _showAboutDialog(context),
+        onAboutTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AboutScreen(isBangla: isBangla),
+            ),
+          );
+        },
       ),
       body: Center(
         child: Container(
@@ -186,7 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             isBangla
                                 ? 'বাংলাদেশ বিজ্ঞান ও শিল্প গবেষণা পরিষদ\nবিজ্ঞান ও প্রযুক্তি মন্ত্রণালয়'
-                                : 'Bangladesh Council of Scientific and Industrial Research',
+                                : 'Bangladesh Council of Scientific and Industrial Research\nMinistry of Science and Technology',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: Colors.white,
@@ -341,12 +349,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    // পরিচিতি / About পেজে সম্পূর্ণ স্ক্রিন আকারে যাওয়া
+    // পরিচিতি / About
     if (option == 'About') {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => AboutScreen(isBangla: isBangla),
+        ),
+      );
+      return;
+    }
+
+    // অনুমোদন / License পেজে যাওয়া
+    if (option == 'License') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LicenseScreen(isBangla: isBangla),
         ),
       );
       return;
@@ -381,26 +400,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           isBangla ? '$option পেজ লোড হচ্ছে...' : 'Loading $option...',
         ),
         duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isBangla ? 'পরিচিতি' : 'About Solectricity'),
-        content: Text(
-          isBangla
-              ? 'বাংলাদেশ বিজ্ঞান ও শিল্প গবেষণা পরিষদ (BCSIR) কর্তৃক প্রস্তুতকৃত সোলার ক্যালকুলেটর অ্যাপ্লিকেশন।'
-              : 'Solar calculator mobile application developed by BCSIR.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isBangla ? 'ঠিক আছে' : 'OK'),
-          ),
-        ],
       ),
     );
   }
