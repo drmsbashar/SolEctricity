@@ -128,10 +128,10 @@ class AppDrawer extends StatelessWidget {
                       _buildSubItem(
                         iconPath: AppAssets.iconLicense,
                         fallbackIcon: Icons.badge_outlined,
-                        title: isBangla ? 'অনুমোদন' : 'Lisence',
+                        title: isBangla ? 'অনুমোদন' : 'License',
                         onTap: () {
                           Navigator.pop(context);
-                          onNavigate('Lisence');
+                          onNavigate('License');
                         },
                       ),
                     ],

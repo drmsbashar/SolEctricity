@@ -12,6 +12,7 @@ import 'installation_screen.dart';
 import 'tools_screen.dart';
 import 'about_screen.dart';
 import 'license_screen.dart';
+import 'load_selection_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -78,7 +79,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _buildFallbackBackground(),
                 ),
               ),
-
               // ২. মূল কনটেন্ট
               SafeArea(
                 child: Column(
@@ -120,9 +120,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                     ),
-
                     const Spacer(flex: 3),
-
                     // টাইটেল
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -155,9 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                     ),
-
                     const Spacer(flex: 5),
-
                     // ফুটার
                     Padding(
                       padding: const EdgeInsets.only(
@@ -212,7 +208,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-
               // ৩. ফ্লোটিং অ্যাকশন মেনু
               Positioned(
                 top: 250,
@@ -285,7 +280,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ওয়েবসাইট খোলার ফাংশন (যেখানে আসল লিংক বসানো আছে)
   Future<void> _launchBcsirWebsite() async {
     final Uri url = Uri.parse('https://bcsir.gov.bd');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -303,20 +297,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // মেনুতে ক্লিক করলে যে ফাংশনটি কল হয়
   void _navigateTo(BuildContext context, String option) {
     if (option == 'BCSIR website') {
       _launchBcsirWebsite();
       return;
     }
-
-    if (option == 'Contact') {
+    if (option == 'Contact' || option == 'যোগাযোগ') {
       _showContactDialog(context);
       return;
     }
-
-    // উপকরণ / Tools মেনু আইটেমসমূহ
-    if (option == 'Tools' || option == 'Compass') {
+    if (option == 'Tools' ||
+        option == 'Compass' ||
+        option == 'উপকরণ' ||
+        option == 'কম্পাস') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -326,8 +319,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
-
-    if (option == 'Leveler') {
+    // Based on load / উপকরণভিত্তিক স্ক্রিনে যাওয়া
+    final lower = option.toLowerCase();
+    if (lower.contains('load') ||
+        option.contains('উপকরণ') ||
+        option.contains('লোড') ||
+        lower.contains('based on load')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LoadSelectionScreen(
+            isBangla: isBangla,
+            onToggleLanguage: toggleLanguage,
+          ),
+        ),
+      );
+      return;
+    }
+    if (option == 'Leveler' || option == 'লেভেলার' || option == 'সমতলকারী') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -337,8 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
-
-    if (option == 'Protractor') {
+    if (option == 'Protractor' || option == 'চাঁদা' || option == 'কোণ') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -348,9 +356,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
-
-    // পরিচিতি / About
-    if (option == 'About') {
+    if (option == 'About' || option == 'পরিচিতি') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -359,9 +365,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
-
-    // অনুমোদন / License পেজে যাওয়া
-    if (option == 'License') {
+    if (option == 'License' ||
+        option == 'অনুমোদন' ||
+        option == 'Privacy Policy' ||
+        option == 'গোপনীয়তা নীতি' ||
+        option == 'গোপনীয়তা নীতি') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -370,9 +378,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
-
-    // রক্ষণাবেক্ষণ পেজে যাওয়া
-    if (option == 'Maintenance') {
+    if (option == 'Maintenance' || option == 'রক্ষণাবেক্ষণ') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -381,9 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
-
-    // স্থাপন পেজে যাওয়া
-    if (option == 'Installation') {
+    if (option == 'Installation' || option == 'স্থাপন') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -393,7 +397,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    // বাকি পেজগুলোর জন্য সাময়িক মেসেজ
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -404,7 +407,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // যোগাযোগ (Contact) ডায়ালগ
   void _showContactDialog(BuildContext context) {
     showDialog(
       context: context,
