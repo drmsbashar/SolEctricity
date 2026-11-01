@@ -1,4 +1,11 @@
+enum SolarSystemType {
+  offGrid, // অফ-গ্রিড (কন্ট্রোলার + ব্যাটারি + ইনভার্টার)
+  hybrid, // হাইব্রিড (বিল্ট-ইন কন্ট্রোলারযুক্ত ইনভার্টার + ব্যাটারি + গ্রিড ব্যাকআপ)
+  gridTied, // গ্রিড-টাই / অন-গ্রিড (ব্যাটারিহীন নেট-মিটারিং সিস্টেম)
+}
+
 class SystemSizingParams {
+  final SolarSystemType systemType;
   double peakSunHours;
   double systemVoltage;
 
@@ -20,6 +27,7 @@ class SystemSizingParams {
   double inverterPowerFactor;
 
   SystemSizingParams({
+    this.systemType = SolarSystemType.offGrid,
     required this.peakSunHours,
     required this.systemVoltage,
     required this.panelPmax,
@@ -40,10 +48,46 @@ class SystemSizingParams {
       ? double.parse((panelPmax / panelImp).toStringAsFixed(2))
       : 0.0;
 
+  // স্টেট আপডেটের জন্য copyWith মেথড
+  SystemSizingParams copyWith({
+    SolarSystemType? systemType,
+    double? peakSunHours,
+    double? systemVoltage,
+    double? panelPmax,
+    double? panelVoc,
+    double? panelImp,
+    double? panelIsc,
+    double? batteryCapacityAh,
+    double? batteryDod,
+    double? batteryEfficiency,
+    int? autonomyDays,
+    String? controllerType,
+    double? inverterEfficiency,
+    double? inverterPowerFactor,
+  }) {
+    return SystemSizingParams(
+      systemType: systemType ?? this.systemType,
+      peakSunHours: peakSunHours ?? this.peakSunHours,
+      systemVoltage: systemVoltage ?? this.systemVoltage,
+      panelPmax: panelPmax ?? this.panelPmax,
+      panelVoc: panelVoc ?? this.panelVoc,
+      panelImp: panelImp ?? this.panelImp,
+      panelIsc: panelIsc ?? this.panelIsc,
+      batteryCapacityAh: batteryCapacityAh ?? this.batteryCapacityAh,
+      batteryDod: batteryDod ?? this.batteryDod,
+      batteryEfficiency: batteryEfficiency ?? this.batteryEfficiency,
+      autonomyDays: autonomyDays ?? this.autonomyDays,
+      controllerType: controllerType ?? this.controllerType,
+      inverterEfficiency: inverterEfficiency ?? this.inverterEfficiency,
+      inverterPowerFactor: inverterPowerFactor ?? this.inverterPowerFactor,
+    );
+  }
+
   factory SystemSizingParams.defaultForLoad(
     double dailyTotalWh,
-    double acPeakWatt,
-  ) {
+    double acPeakWatt, {
+    SolarSystemType systemType = SolarSystemType.offGrid,
+  }) {
     double recVoltage = 12.0;
     if (dailyTotalWh > 3000 || acPeakWatt > 2500) {
       recVoltage = 48.0;
@@ -52,6 +96,7 @@ class SystemSizingParams {
     }
 
     return SystemSizingParams(
+      systemType: systemType,
       peakSunHours: 4.8,
       systemVoltage: recVoltage,
       panelPmax: 150.0,

@@ -30,7 +30,7 @@ class LocationNameData {
 }
 
 class SolarRadiationService {
-  static const double defaultPsh = 5.5;
+  static const double defaultPsh = 4.8;
 
   /// ওপেনস্ট্রিটম্যাপ রিভার্স জিওকোডিং দিয়ে জেলা/স্থানের নাম সংগ্রহ
   static Future<LocationNameData> _fetchLocationNames(
