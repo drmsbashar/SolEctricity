@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
+import 'system_diagram_screen.dart';
 
 class SystemCalculationSummaryScreen extends StatefulWidget {
   final SolarCalculationResult result;
   final SystemSizingParams params;
-  final bool isBangla; // 👈 initialIsBangla পরিবর্তন করে isBangla
+  final bool isBangla;
   final VoidCallback onProceedToDiagram;
 
   const SystemCalculationSummaryScreen({
     super.key,
     required this.result,
     required this.params,
-    this.isBangla = true, // 👈
+    this.isBangla = true,
     required this.onProceedToDiagram,
   });
 
@@ -25,11 +26,14 @@ class SystemCalculationSummaryScreen extends StatefulWidget {
 class _SystemCalculationSummaryScreenState
     extends State<SystemCalculationSummaryScreen> {
   late bool _isBangla;
+  bool _showPvDetails = false;
+  bool _showBatteryDetails = false;
+  bool _showProtectionDetails = false;
 
   @override
   void initState() {
     super.initState();
-    _isBangla = widget.isBangla; // 👈
+    _isBangla = widget.isBangla;
   }
 
   void _toggleLanguage() {
@@ -84,19 +88,34 @@ class _SystemCalculationSummaryScreenState
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  // ১. মোট চাহিদা কার্ড
                   _buildDemandHeaderCard(result, params),
                   const SizedBox(height: 14),
+
+                  // ২. সোলার পিভি অ্যারে কার্ড (প্রোগ্রেসিভ ডিসক্লোজার)
                   _buildPvArrayCard(result, params),
                   const SizedBox(height: 14),
+
+                  // ৩. ব্যাটারি ব্যাংক কার্ড (প্রোগ্রেসিভ ডিসক্লোজার)
                   _buildBatteryBankCard(result, params),
                   const SizedBox(height: 14),
+
+                  // ৪. পাওয়ার ইলেকট্রনিক্স কার্ড (বিশুদ্ধ সাইন ওয়েভ উল্লেখসহ)
                   _buildPowerElectronicsCard(result),
                   const SizedBox(height: 14),
+
+                  // ৫. 🛡️ সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড (নতুন যুক্ত)
+                  _buildProtectionAndCablesCard(result),
+                  const SizedBox(height: 14),
+
+                  // ৬. সিস্টেম রিক্যাপ কার্ড
                   _buildSystemSpecsRecapCard(result, params),
                 ],
               ),
             ),
           ),
+
+          // নিচে ওয়্যারিং ডায়াগ্রামের অ্যাকশন বাটন
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
@@ -124,7 +143,8 @@ class _SystemCalculationSummaryScreenState
                     ),
                     elevation: 2,
                   ),
-                  onPressed: widget.onProceedToDiagram,
+                  onPressed:
+                      widget.onProceedToDiagram, // 👈 সরাসরি কলব্যাক কল হবে
                   icon: const Icon(
                     Icons.account_tree_rounded,
                     color: Colors.white,
@@ -241,7 +261,7 @@ class _SystemCalculationSummaryScreenState
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'AC: ${result.dailyAcWh.toStringAsFixed(0)} Wh (${result.effectiveAcWh.toStringAsFixed(0)} Wh eq.)',
+                  'AC: ${result.dailyAcWh.toStringAsFixed(0)} Wh',
                   style: const TextStyle(color: Colors.white70, fontSize: 11),
                 ),
                 Text(
@@ -271,46 +291,59 @@ class _SystemCalculationSummaryScreenState
               '${result.totalPanels} ${_isBangla ? "টি" : "pcs"} (${params.panelPmax.toInt()} Wp)',
           icon: Icons.view_module_rounded,
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailMetric(
-                label: _isBangla ? 'সিরিজ সংযোগ (PVs)' : 'Series (PVs)',
-                value:
-                    '${result.panelsSeries} ${_isBangla ? "টি" : "in Series"}',
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDetailMetric(
-                label: _isBangla ? 'প্যারালাল স্ট্রিং (PVp)' : 'Parallel (PVp)',
-                value:
-                    '${result.panelsParallel} ${_isBangla ? "স্ট্রিং" : "Strings"}',
-              ),
-            ),
-          ],
-        ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailMetric(
-                label: 'Array Vmp / Voc',
-                value:
-                    '${result.arrayVmp.toStringAsFixed(1)}V / ${result.arrayVoc.toStringAsFixed(1)}V',
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDetailMetric(
-                label: 'Array Imp / Isc',
-                value:
-                    '${result.arrayImp.toStringAsFixed(1)}A / ${result.arrayIsc.toStringAsFixed(1)}A',
-              ),
-            ),
-          ],
+        _buildSimpleConnectionBadge(
+          text: _isBangla
+              ? 'সংযোগ বিন্যাস: প্রতি সারিতে ${result.panelsSeries}টি করে মোট ${result.panelsParallel}টি সারি'
+              : 'Wiring: ${result.panelsSeries} in Series × ${result.panelsParallel} Strings Parallel',
         ),
+        _buildDisclosureToggle(
+          isExpanded: _showPvDetails,
+          onTap: () => setState(() => _showPvDetails = !_showPvDetails),
+        ),
+        if (_showPvDetails) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla ? 'সিরিজ সংযোগ (PVs)' : 'Series (PVs)',
+                  value: '${result.panelsSeries} ${_isBangla ? "টি" : "Units"}',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla
+                      ? 'প্যারালাল স্ট্রিং (PVp)'
+                      : 'Parallel (PVp)',
+                  value:
+                      '${result.panelsParallel} ${_isBangla ? "স্ট্রিং" : "Strings"}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailMetric(
+                  label: 'Array Vmp / Voc',
+                  value:
+                      '${result.arrayVmp.toStringAsFixed(1)}V / ${result.arrayVoc.toStringAsFixed(1)}V',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDetailMetric(
+                  label: 'Array Imp / Isc',
+                  value:
+                      '${result.arrayImp.toStringAsFixed(1)}A / ${result.arrayIsc.toStringAsFixed(1)}A',
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -331,46 +364,61 @@ class _SystemCalculationSummaryScreenState
               '${result.totalBatteries} ${_isBangla ? "টি" : "pcs"} (${params.batteryCapacityAh.toInt()} Ah @ 12V)',
           icon: Icons.layers_rounded,
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailMetric(
-                label: _isBangla ? 'সিরিজে ব্যাটারি (Bs)' : 'Series (Bs)',
-                value:
-                    '${result.batteriesSeries} ${_isBangla ? "টি" : "in Series"}',
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDetailMetric(
-                label: _isBangla ? 'প্যারালালে স্ট্রিং (Bp)' : 'Parallel (Bp)',
-                value:
-                    '${result.batteriesParallel} ${_isBangla ? "স্ট্রিং" : "Strings"}',
-              ),
-            ),
-          ],
-        ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailMetric(
-                label: _isBangla ? 'ব্যাকআপ স্থায়িত্ব' : 'Backup Autonomy',
-                value:
-                    '${params.autonomyDays} ${_isBangla ? "দিন (মেঘলা আবহাওয়া)" : "Days"}',
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDetailMetric(
-                label: 'DoD / Efficiency',
-                value:
-                    '${params.batteryDod.toInt()}% / ${params.batteryEfficiency.toInt()}%',
-              ),
-            ),
-          ],
+        _buildSimpleConnectionBadge(
+          text: _isBangla
+              ? 'ব্যাকআপ স্থায়িত্ব: ${params.autonomyDays} দিন (মেঘলা আকাশ)'
+              : 'Backup Autonomy: ${params.autonomyDays} Day(s) (Cloudy weather)',
         ),
+        _buildDisclosureToggle(
+          isExpanded: _showBatteryDetails,
+          onTap: () =>
+              setState(() => _showBatteryDetails = !_showBatteryDetails),
+        ),
+        if (_showBatteryDetails) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla ? 'সিরিজে ব্যাটারি (Bs)' : 'Series (Bs)',
+                  value:
+                      '${result.batteriesSeries} ${_isBangla ? "টি" : "Units"}',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla
+                      ? 'প্যারালালে স্ট্রিং (Bp)'
+                      : 'Parallel (Bp)',
+                  value:
+                      '${result.batteriesParallel} ${_isBangla ? "স্ট্রিং" : "Strings"}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailMetric(
+                  label: 'Depth of Discharge (DoD)',
+                  value: '${params.batteryDod.toInt()}%',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla
+                      ? 'ব্যাটারি এফিসিয়েন্সি'
+                      : 'Battery Efficiency',
+                  value: '${params.batteryEfficiency.toInt()}%',
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -460,16 +508,40 @@ class _SystemCalculationSummaryScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _isBangla
-                            ? 'অফ-গ্রিড ইনভার্টার ক্যাপাসিটি'
-                            : 'Off-grid Inverter Capacity',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _isBangla
+                                ? 'অফ-গ্রিড ইনভার্টার ক্যাপাসিটি'
+                                : 'Off-grid Inverter Capacity',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1B6A3B).withAlpha(25),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Pure Sine Wave',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B6A3B),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         '${result.inverterVoltage.toInt()}V DC to 220V AC, ≥ ${result.inverterCapacityVa.toInt()} VA',
                         style: const TextStyle(
@@ -483,6 +555,94 @@ class _SystemCalculationSummaryScreenState
                 ),
               ],
             ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 🛡️ সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
+  Widget _buildProtectionAndCablesCard(SolarCalculationResult result) {
+    return _buildSectionCard(
+      title: _isBangla
+          ? 'সুরক্ষাব্যবস্থা ও ওয়্যারিং ক্যাবল'
+          : 'Protection & Wiring Cables',
+      icon: Icons.security_rounded,
+      children: [
+        // প্রোগ্রেসিভ ডিসক্লোজার টগল বাটন
+        _buildDisclosureToggle(
+          isExpanded: _showProtectionDetails,
+          onTap: () =>
+              setState(() => _showProtectionDetails = !_showProtectionDetails),
+        ),
+
+        // ব্যবহারকারী ট্যাপ করলে বিস্তারিত প্যারামিটার প্রদর্শিত হবে
+        if (_showProtectionDetails) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla
+                      ? 'পিভি ডিসি ব্রেকার (DC MCB)'
+                      : 'PV Array DC Breaker',
+                  value: '≥ ${result.pvBreakerAmp.toInt()} A',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla ? 'ব্যাটারি ডিসি ফিউজ' : 'Battery DC Fuse',
+                  value: '≥ ${result.batteryFuseAmp.toInt()} A',
+                ),
+              ),
+            ],
+          ),
+          if (result.hasAcLoad) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDetailMetric(
+                    label: _isBangla
+                        ? 'ইনভার্টার এসি ব্রেকার'
+                        : 'AC Output Breaker',
+                    value: '≥ ${result.acBreakerAmp.toInt()} A (220V)',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildDetailMetric(
+                    label: _isBangla
+                        ? 'কন্ট্রোলার-ব্যাটারি ব্রেকার'
+                        : 'SCC Battery Breaker',
+                    value: '≥ ${result.chargeControllerBreakerAmp.toInt()} A',
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla
+                      ? 'পিভি তারের মাপ (কপার)'
+                      : 'PV Array Cable Size',
+                  value: result.pvCableSizeMm,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDetailMetric(
+                  label: _isBangla
+                      ? 'ব্যাটারি তারের মাপ'
+                      : 'Battery Cable Size',
+                  value: result.batteryCableSizeMm,
+                ),
+              ),
+            ],
           ),
         ],
       ],
@@ -617,6 +777,65 @@ class _SystemCalculationSummaryScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleConnectionBadge({required String text}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.hub_outlined, size: 14, color: Colors.grey),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 11.5, color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisclosureToggle({
+    required bool isExpanded,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              isExpanded
+                  ? (_isBangla ? 'কারিগরি তথ্য লুকান' : 'Hide Technical Specs')
+                  : (_isBangla
+                        ? 'বিস্তারিত কারিগরি স্পেসিফিকেশন দেখুন'
+                        : 'Show Technical Specs'),
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: Color(0xFF1B6A3B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Icon(
+              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              size: 18,
+              color: const Color(0xFF1B6A3B),
+            ),
+          ],
+        ),
       ),
     );
   }

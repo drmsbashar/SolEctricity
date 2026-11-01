@@ -4,6 +4,7 @@ import '../models/system_sizing_params.dart';
 import '../services/solar_radiation_service.dart';
 import '../services/solar_calculation_service.dart';
 import 'system_calculation_summary_screen.dart';
+import 'system_diagram_screen.dart';
 
 class SystemParametersScreen extends StatefulWidget {
   final double dailyTotalWh;
@@ -852,7 +853,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                           params: _params,
                         );
 
-                        // ৩. নেভিগেশন (প্যারামিটার নাম isBangla ব্যবহার করা হয়েছে)
+                        // ৩. নেভিগেশন (একদম সরাসরি এবং পরিষ্কার)
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -860,9 +861,19 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                 SystemCalculationSummaryScreen(
                                   result: result,
                                   params: _params,
-                                  isBangla: _isBangla, // 👈 এখন এরর হবে না
+                                  isBangla: _isBangla,
                                   onProceedToDiagram: () {
-                                    // ৩য় ধাপ: ওয়্যারিং ডায়াগ্রাম
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            SystemDiagramScreen(
+                                              result: result,
+                                              params: _params,
+                                              isBangla: _isBangla,
+                                            ),
+                                      ),
+                                    );
                                   },
                                 ),
                           ),

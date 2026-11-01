@@ -22,7 +22,7 @@ class LoadSelectionScreen extends StatefulWidget {
 
 class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
   final List<ApplianceItem> _userItems = [];
-  late bool _isBangla; // স্ক্রিনের নিজস্ব ভাষা স্টেট
+  late bool _isBangla;
 
   @override
   void initState() {
@@ -30,12 +30,11 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
     _isBangla = widget.isBangla;
   }
 
-  // ভাষা টগল মেথড
   void _handleLanguageToggle() {
     setState(() {
       _isBangla = !_isBangla;
     });
-    widget.onToggleLanguage(); // মূল অ্যাপের স্টেটও সিনক্রোনাইজ রাখা
+    widget.onToggleLanguage();
   }
 
   Future<void> _openCategoryInput(CategoryConfig category) async {
@@ -107,7 +106,6 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
       ),
       body: Column(
         children: [
-          // ১২টি বাটন সম্বলিত গ্রিড
           Expanded(
             child: Center(
               child: SingleChildScrollView(
@@ -138,15 +136,12 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
               ),
             ),
           ),
-
-          // নিচের লাইভ সামারি ও নেভিগেশন বার
           _buildLiveSummaryBar(engine),
         ],
       ),
     );
   }
 
-  // ৩ডি ইফেক্ট বাটন কার্ড
   Widget _build3DCard(CategoryConfig category, int count) {
     final title = _isBangla ? category.titleBn : category.titleEn;
     final hasItems = count > 0;
@@ -227,8 +222,6 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
             ),
           ),
         ),
-
-        // আইটেম কাউন্টার ব্যাজ
         if (hasItems)
           Positioned(
             top: -4,
@@ -264,7 +257,6 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
     );
   }
 
-  // রিয়েল-টাইম স্টিকি বটম বার
   Widget _buildLiveSummaryBar(LoadCalculationEngine engine) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -286,7 +278,6 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
           children: [
             Row(
               children: [
-                // এসি দৈনিক শক্তি
                 Expanded(
                   child: _buildMetricTile(
                     title: _isBangla ? 'এসি দৈনিক শক্তি' : 'Daily AC Load',
@@ -296,7 +287,6 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // ডিসি দৈনিক শক্তি
                 Expanded(
                   child: _buildMetricTile(
                     title: _isBangla ? 'ডিসি দৈনিক শক্তি' : 'Daily DC Load',
@@ -306,7 +296,6 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // এসি পিক পাওয়ার (ΣLa)
                 Expanded(
                   child: _buildMetricTile(
                     title: _isBangla ? 'এসি পিক পাওয়ার' : 'AC Peak Power',
@@ -346,27 +335,17 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
                             items: _userItems,
                             isBangla: _isBangla,
                             onProceedToSizing: () {
-                              // লোড সামারি স্ক্রিন থেকে সিস্টেম প্যারামিটার ইনপুট স্ক্রিনে যাওয়া
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => SystemParametersScreen(
                                     dailyTotalWh: engine.sigmaLtotal,
                                     acPeakWatt: engine.sigmaLa,
+                                    dailyAcWh: engine.sigmaLac,
+                                    dailyDcWh: engine.sigmaLdc,
                                     isBangla: _isBangla,
                                     onToggleLanguage: _handleLanguageToggle,
-                                    onProceedToFinalResults: (params) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                _isBangla
-                                                    ? 'চূড়ান্ত সাইজিং হিসেব সম্পন্ন হচ্ছে...'
-                                                    : 'Calculating final sizing results...',
-                                              ),
-                                            ),
-                                          );
-                                    },
+                                    onProceedToFinalResults: (params) {},
                                   ),
                                 ),
                               );

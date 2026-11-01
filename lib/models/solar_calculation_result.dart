@@ -29,6 +29,14 @@ class SolarCalculationResult {
   final bool hasAcLoad;
   final bool hasDcLoad;
 
+  // 🛡️ নতুন যুক্ত সুরক্ষাব্যবস্থা ও তারের প্যারামিটার
+  final double pvBreakerAmp; // সোলার পিভি ডিসি ব্রেকার (DC MCB)
+  final double batteryFuseAmp; // ব্যাটারি ব্যাংক ডিসি ফিউজ (DC Fuse)
+  final double chargeControllerBreakerAmp; // কন্ট্রোলার টু ব্যাটারি ব্রেকার
+  final double acBreakerAmp; // ইনভার্টার এসি আউটপুট ব্রেকার (AC MCB)
+  final String pvCableSizeMm; // প্যানেল থেকে কন্ট্রোলার তারের সাইজ (mm²)
+  final String batteryCableSizeMm; // ব্যাটারি থেকে ইনভার্টার তারের সাইজ (mm²)
+
   SolarCalculationResult({
     required this.dailyAcWh,
     required this.dailyDcWh,
@@ -55,5 +63,11 @@ class SolarCalculationResult {
     required this.inverterVoltage,
     required this.hasAcLoad,
     required this.hasDcLoad,
+    required this.pvBreakerAmp,
+    required this.batteryFuseAmp,
+    required this.chargeControllerBreakerAmp,
+    required this.acBreakerAmp,
+    required this.pvCableSizeMm,
+    required this.batteryCableSizeMm,
   });
 }
