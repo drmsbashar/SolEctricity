@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../models/system_sizing_params.dart';
 import '../services/solar_radiation_service.dart';
-import 'appliance_input_screen.dart'; // DragSpinInputField উইজেটের জন্য
+import '../services/solar_calculation_service.dart';
+import 'system_calculation_summary_screen.dart';
 
 class SystemParametersScreen extends StatefulWidget {
   final double dailyTotalWh;
   final double acPeakWatt;
+  final double dailyAcWh; // 👈 নতুন যোগ করা হলো
+  final double dailyDcWh; // 👈 নতুন যোগ করা হলো
   final bool isBangla;
   final VoidCallback onToggleLanguage;
   final Function(SystemSizingParams params) onProceedToFinalResults;
@@ -15,6 +18,8 @@ class SystemParametersScreen extends StatefulWidget {
     super.key,
     required this.dailyTotalWh,
     required this.acPeakWatt,
+    this.dailyAcWh = 0.0, // ডিফল্ট ভ্যালু যাতে আগের কল না ভাঙে
+    this.dailyDcWh = 0.0,
     required this.isBangla,
     required this.onToggleLanguage,
     required this.onProceedToFinalResults,
@@ -29,101 +34,103 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
   late bool _isBangla;
   bool _isLoadingPsh = false;
   SolarRadiationResult? _pshResult;
-
-  // ব্যাটারির ধরন ট্র্যাকিং
   String _selectedBatteryType = 'lead_acid';
 
   @override
   void initState() {
     super.initState();
     _isBangla = widget.isBangla;
-    // লোড এবং পিক ওয়াট অনুসারে ডিফল্ট প্যারামিটার প্রস্তুত
     _params = SystemSizingParams.defaultForLoad(
       widget.dailyTotalWh,
       widget.acPeakWatt,
     );
 
-    // লোডের ক্যাটাগরি অনুযায়ী প্রারম্ভিক প্যানেল ও ব্যাটারি সেট করা
     final recommendedPanels = _getRecommendedPanelPowers();
     final recommendedBatteries = _getRecommendedBatteryCapacities();
 
-    _applyPanelPreset(recommendedPanels.first);
+    _updatePanelParametersFromWatts(recommendedPanels.first);
     _params.batteryCapacityAh = recommendedBatteries.first;
 
     _fetchNasaPshData();
   }
 
-  // দৈনিক লোডের ওপর ভিত্তি করে উপযুক্ত প্যানেল পাওয়ার চিপস
+  double _getRecommendedVoltage() {
+    if (widget.dailyTotalWh <= 1500 && widget.acPeakWatt <= 1000) return 12.0;
+    if (widget.dailyTotalWh <= 3000 && widget.acPeakWatt <= 2500) return 24.0;
+    return 48.0;
+  }
+
   List<double> _getRecommendedPanelPowers() {
-    if (widget.dailyTotalWh <= 800) {
-      return [50.0, 80.0, 100.0, 150.0];
-    } else if (widget.dailyTotalWh <= 2500) {
-      return [150.0, 200.0, 250.0, 350.0];
-    } else {
-      return [350.0, 450.0, 550.0, 650.0];
-    }
+    if (widget.dailyTotalWh <= 800) return [50.0, 80.0, 100.0, 150.0];
+    if (widget.dailyTotalWh <= 2500) return [150.0, 200.0, 250.0, 350.0];
+    return [350.0, 450.0, 550.0, 650.0];
   }
 
-  // দৈনিক লোডের ওপর ভিত্তি করে উপযুক্ত ব্যাটারি Ah চিপস
   List<double> _getRecommendedBatteryCapacities() {
-    if (widget.dailyTotalWh <= 800) {
-      return [40.0, 50.0, 80.0, 100.0];
-    } else if (widget.dailyTotalWh <= 2500) {
-      return [100.0, 130.0, 150.0, 200.0];
-    } else {
-      return [150.0, 200.0, 230.0, 260.0];
-    }
+    if (widget.dailyTotalWh <= 800) return [40.0, 50.0, 80.0, 100.0];
+    if (widget.dailyTotalWh <= 2500) return [100.0, 130.0, 150.0, 200.0];
+    return [150.0, 200.0, 230.0, 260.0];
   }
 
-  // প্যানেল প্রিসেট মেথড (Wp পরিবর্তনের সাথে Voc, Imp, Isc স্বয়ংক্রিয় মান)
-  void _applyPanelPreset(double power) {
+  void _updatePanelParametersFromWatts(double watts) {
     setState(() {
-      _params.panelPmax = power;
-      if (power == 50.0) {
+      _params.panelPmax = watts;
+
+      if (watts == 50.0) {
         _params.panelVoc = 22.70;
         _params.panelImp = 2.63;
         _params.panelIsc = 2.83;
-      } else if (power == 80.0) {
+      } else if (watts == 80.0) {
         _params.panelVoc = 22.40;
         _params.panelImp = 4.40;
         _params.panelIsc = 4.80;
-      } else if (power == 100.0) {
+      } else if (watts == 100.0) {
         _params.panelVoc = 22.50;
         _params.panelImp = 5.50;
         _params.panelIsc = 5.90;
-      } else if (power == 150.0) {
+      } else if (watts == 150.0) {
         _params.panelVoc = 22.70;
         _params.panelImp = 8.20;
         _params.panelIsc = 8.80;
-      } else if (power == 200.0) {
+      } else if (watts == 200.0) {
         _params.panelVoc = 24.30;
         _params.panelImp = 9.80;
         _params.panelIsc = 10.40;
-      } else if (power == 250.0) {
+      } else if (watts == 250.0) {
         _params.panelVoc = 37.50;
         _params.panelImp = 8.35;
         _params.panelIsc = 8.90;
-      } else if (power == 350.0) {
+      } else if (watts == 350.0) {
         _params.panelVoc = 46.50;
         _params.panelImp = 9.10;
         _params.panelIsc = 9.70;
-      } else if (power == 450.0) {
+      } else if (watts == 450.0) {
         _params.panelVoc = 49.30;
         _params.panelImp = 10.95;
         _params.panelIsc = 11.50;
-      } else if (power == 550.0) {
+      } else if (watts == 550.0) {
         _params.panelVoc = 49.80;
         _params.panelImp = 13.15;
         _params.panelIsc = 13.95;
-      } else if (power == 650.0) {
+      } else if (watts == 650.0) {
         _params.panelVoc = 51.20;
         _params.panelImp = 15.30;
         _params.panelIsc = 16.10;
+      } else {
+        double estimatedVoc = (watts <= 200.0)
+            ? 22.5
+            : ((watts <= 300.0) ? 37.0 : 48.0);
+        double estimatedVmp = estimatedVoc * 0.81;
+        double estimatedImp = watts / estimatedVmp;
+        double estimatedIsc = estimatedImp * 1.07;
+
+        _params.panelVoc = double.parse(estimatedVoc.toStringAsFixed(2));
+        _params.panelImp = double.parse(estimatedImp.toStringAsFixed(2));
+        _params.panelIsc = double.parse(estimatedIsc.toStringAsFixed(2));
       }
     });
   }
 
-  // ব্যাটারি টাইপ প্রিসেট মেথড
   void _applyBatteryTypePreset(String type) {
     setState(() {
       _selectedBatteryType = type;
@@ -140,14 +147,9 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     });
   }
 
-  // নাসা ক্লাইমাটোলজি ডেটাবেজ থেকে সৌর-তথ্য সংগ্রহ
   Future<void> _fetchNasaPshData() async {
-    setState(() {
-      _isLoadingPsh = true;
-    });
-
+    setState(() => _isLoadingPsh = true);
     final result = await SolarRadiationService.fetchPeakSunHours();
-
     if (mounted) {
       setState(() {
         _isLoadingPsh = false;
@@ -158,104 +160,40 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
   }
 
   void _handleLanguageToggle() {
-    setState(() {
-      _isBangla = !_isBangla;
-    });
+    setState(() => _isBangla = !_isBangla);
     widget.onToggleLanguage();
   }
 
-  // স্টিকার হেল্প পপআপ ডায়ালগ
-  void _showStickerHelpDialog({
-    required String title,
-    required String description,
-    required String parameterName,
-    required String sampleValue,
-  }) {
+  void _showStickerHelpDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.help_outline, color: Color(0xFF1B6A3B)),
+            const Icon(Icons.info_outline, color: Color(0xFF1B6A3B)),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            Text(
+              _isBangla ? 'প্যানেল স্পেক্স নির্দেশিকা' : 'PV Specs Guide',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              description,
-              style: const TextStyle(fontSize: 13.5, color: Colors.black87),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade400, width: 1.2),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isBangla
-                        ? 'সোলার প্যানেলের পেছনের স্টিকারে লক্ষ্য করুন:'
-                        : 'Look at the sticker behind solar panel:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber.shade900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.redAccent, width: 1.5),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          parameterName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Text(
-                          sampleValue,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.redAccent,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        content: Text(
+          _isBangla
+              ? 'সোলার প্যানেলের পেছনে লাগানো সিলভার নেমপ্লেট স্টিকার থেকে Voc, Imp এবং Isc মানগুলো দেখতে পাবেন।\n\n'
+                    '• Pmax: রেটেড ক্ষমতা (Watt)\n'
+                    '• Voc: ওপেন সার্কিট ভোল্টেজ\n'
+                    '• Imp: সর্বোচ্চ পাওয়ার কারেন্ট\n'
+                    '• Isc: শর্ট সার্কিট কারেন্ট\n\n'
+                    'সঠিক হিসাবের জন্য স্টিকারের সাথে মানগুলো মিলিয়ে এডিট করে নিতে পারেন।'
+              : 'Refer to the technical specification sticker on the back of your solar panel (STC ratings):\n\n'
+                    '• Pmax: Maximum power rating (W)\n'
+                    '• Voc: Open circuit voltage (V)\n'
+                    '• Imp: Current at maximum power (A)\n'
+                    '• Isc: Short circuit current (A)\n\n'
+                    'Tap any value box below to update them according to your exact panel sticker.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -263,8 +201,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             child: Text(
               _isBangla ? 'বুঝেছি' : 'Got it',
               style: const TextStyle(
-                fontWeight: FontWeight.bold,
                 color: Color(0xFF1B6A3B),
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
@@ -273,19 +211,100 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     );
   }
 
+  void _openDirectValueEditor({
+    required String title,
+    required double currentValue,
+    required double min,
+    required double max,
+    required ValueChanged<double> onSubmitted,
+  }) {
+    final controller = TextEditingController(text: currentValue.toString());
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${_isBangla ? "মান নির্ধারণ করুন" : "Set Value"}: $title',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              autofocus: true,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFFF3F4F6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(
+                    Icons.check_circle,
+                    color: Color(0xFF1B6A3B),
+                  ),
+                  onPressed: () {
+                    final val = double.tryParse(controller.text);
+                    if (val != null && val >= min && val <= max) {
+                      onSubmitted(val);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final recommendedVoltage = _getRecommendedVoltage();
+
+    final approxPanels = (_params.panelPmax > 0 && _params.peakSunHours > 0)
+        ? ((widget.dailyTotalWh /
+                  (_params.peakSunHours * _params.panelPmax * 0.75)))
+              .ceil()
+        : 1;
+
+    final approxBatteries =
+        (_params.batteryCapacityAh > 0 &&
+            _params.batteryDod > 0 &&
+            _params.batteryEfficiency > 0)
+        ? ((widget.dailyTotalWh * _params.autonomyDays) /
+                  (_params.systemVoltage *
+                      _params.batteryCapacityAh *
+                      (_params.batteryDod / 100) *
+                      (_params.batteryEfficiency / 100)))
+              .ceil()
+        : 1;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6F5),
+      backgroundColor: const Color(0xFFF6F8F7),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6A3B),
-        elevation: 2,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        elevation: 0,
         title: Text(
-          _isBangla ? 'সিস্টেম প্যারামিটার ইনপুট' : 'System Parameters Input',
+          _isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -293,500 +312,580 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           ),
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(35),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: TextButton.icon(
-              onPressed: _handleLanguageToggle,
-              icon: const Icon(Icons.translate, color: Colors.white, size: 16),
-              label: Text(
+          IconButton(
+            onPressed: _handleLanguageToggle,
+            icon: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(40),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
                 _isBangla ? 'ENG' : 'বাংলা',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
               ),
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // লোড সামারি ব্যানার
-            _buildLoadBanner(),
-            const SizedBox(height: 12),
-
-            // ১. সিস্টেম ও পরিবেশ (গ্রুপ ১)
-            _buildSectionCard(
-              title: _isBangla
-                  ? '১. সিস্টেম ও পরিবেশ'
-                  : '1. System & Environment',
-              icon: Icons.settings_suggest,
-              children: [
-                _buildSystemVoltageSelector(),
-                const SizedBox(height: 12),
-                _buildPeakSunHoursInput(),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // ২. সোলার প্যানেল স্পেসিফিকেশন (গ্রুপ ২)
-            _buildSectionCard(
-              title: _isBangla
-                  ? '২. সোলার প্যানেল স্পেসিফিকেশন'
-                  : '2. Solar PV Module Specs',
-              icon: Icons.solar_power,
-              children: [
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'প্যানেল পাওয়ার (Pmax)'
-                      : 'Module Power (Pmax)',
-                  unit: 'Wp',
-                  value: _params.panelPmax,
-                  step: 10.0,
-                  min: 10.0,
-                  max: 700.0,
-                  onChanged: (v) => setState(() => _params.panelPmax = v),
-                  onHelp: () => _showStickerHelpDialog(
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Column(
+                children: [
+                  // ১. সৌর বিকিরণ ও অবস্থান
+                  _buildCard(
                     title: _isBangla
-                        ? 'প্যানেলের ক্ষমতা (Pmax)'
-                        : 'Panel Power (Pmax)',
-                    description: _isBangla
-                        ? 'সোলার প্যানেলের পেছনে স্টিকারে প্যানেলের পাওয়ার লেখা থাকে। সেখানের “Pmax” এর সংখ্যাটা বসাতে হবে।'
-                        : 'Look at the sticker on the back of the solar panel. Enter the value labeled "Pmax".',
-                    parameterName: 'Maximum Power (Pmax)',
-                    sampleValue: '50 Wp / 150 Wp',
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                // ডাইনামিক লোড-রেসপনসিভ পাওয়ার চিপস
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _getRecommendedPanelPowers().map((w) {
-                      final isSelected = _params.panelPmax == w;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6.0),
-                        child: ChoiceChip(
-                          label: Text('${w.toInt()} W'),
-                          selected: isSelected,
-                          selectedColor: const Color(0xFF1B6A3B).withAlpha(45),
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: isSelected
-                                ? const Color(0xFF1B6A3B)
-                                : Colors.black87,
+                        ? '১. সৌর বিকিরণ ও অবস্থান'
+                        : '1. Solar Radiation & Location',
+                    icon: Icons.wb_sunny_rounded,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSmartSlider(
+                          label: _isBangla
+                              ? 'পিক সান আওয়ার (সৌর-সময়)'
+                              : 'Peak Sun Hours (PSH)',
+                          value: _params.peakSunHours,
+                          min: 2.0,
+                          max: 8.0,
+                          unit: 'h',
+                          divisions: 60,
+                          onChanged: (v) => setState(
+                            () => _params.peakSunHours = double.parse(
+                              v.toStringAsFixed(1),
+                            ),
                           ),
-                          onSelected: (_) => _applyPanelPreset(w),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ওপেন সার্কিট ভোল্টেজ (Voc)
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'ওপেন সার্কিট ভোল্টেজ (Voc)'
-                      : 'Open Circuit Voltage (Voc)',
-                  unit: 'V',
-                  value: _params.panelVoc,
-                  step: 0.5,
-                  min: 10.0,
-                  max: 65.0,
-                  isDecimal: true,
-                  onChanged: (v) => setState(() => _params.panelVoc = v),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'প্যানেলের ভোল্টেজ (Voc)'
-                        : 'Panel Voltage (Voc)',
-                    description: _isBangla
-                        ? 'সোলার প্যানেলের পেছনে স্টিকারে প্যানেলের ভোল্টেজ লেখা থাকে। সেখানের “Voc” এর সংখ্যাটা বসাতে হবে।'
-                        : 'Enter the open circuit voltage labeled "Voc" from the back sticker of the panel.',
-                    parameterName: 'Open Circuit Voltage (Voc)',
-                    sampleValue: '22.70 V',
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // প্রধান কারেন্ট (Imp)
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'প্রধান কারেন্ট (Imp)'
-                      : 'Max Power Current (Imp)',
-                  unit: 'A',
-                  value: _params.panelImp,
-                  step: 0.2,
-                  min: 0.5,
-                  max: 30.0,
-                  isDecimal: true,
-                  onChanged: (v) => setState(() => _params.panelImp = v),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'প্রধান কারেন্ট (Imp)'
-                        : 'Operating Current (Imp)',
-                    description: _isBangla
-                        ? 'সোলার প্যানেলের পেছনে স্টিকারে প্যানেলের প্রধান কারেন্ট লেখা থাকে। সেখানের “Imp” এর সংখ্যাটা বসাতে হবে।'
-                        : 'Enter the operating current labeled "Imp" from the panel nameplate sticker.',
-                    parameterName: 'Maximum Power Current (Imp)',
-                    sampleValue: '2.63 A / 8.20 A',
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // সর্বোচ্চ কারেন্ট (Isc)
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'সর্বোচ্চ কারেন্ট (Isc)'
-                      : 'Short Circuit Current (Isc)',
-                  unit: 'A',
-                  value: _params.panelIsc,
-                  step: 0.2,
-                  min: 0.5,
-                  max: 35.0,
-                  isDecimal: true,
-                  onChanged: (v) => setState(() => _params.panelIsc = v),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'সর্বোচ্চ কারেন্ট (Isc)'
-                        : 'Short Circuit Current (Isc)',
-                    description: _isBangla
-                        ? 'সোলার প্যানেলের পেছনে স্টিকারে প্যানেলের সর্বোচ্চ কারেন্ট লেখা থাকে। সেখানের “Isc” এর সংখ্যাটা বসাতে হবে।'
-                        : 'Enter the short circuit current labeled "Isc" from the panel nameplate sticker.',
-                    parameterName: 'Short Circuit Current (Isc)',
-                    sampleValue: '2.83 A / 8.80 A',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // ৩. ব্যাটারি ব্যাংক স্পেসিফিকেশন (গ্রুপ ৩)
-            _buildSectionCard(
-              title: _isBangla
-                  ? '৩. ব্যাটারি স্পেসিফিকেশন'
-                  : '3. Battery Bank Specs',
-              icon: Icons.battery_charging_full,
-              children: [
-                Text(
-                  _isBangla
-                      ? 'ব্যাটারির ধরন (Technology):'
-                      : 'Battery Technology:',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    ChoiceChip(
-                      label: Text(_isBangla ? 'লেড-এসিড' : 'Lead-Acid'),
-                      selected: _selectedBatteryType == 'lead_acid',
-                      selectedColor: const Color(0xFF1B6A3B).withAlpha(45),
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: _selectedBatteryType == 'lead_acid'
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: _selectedBatteryType == 'lead_acid'
-                            ? const Color(0xFF1B6A3B)
-                            : Colors.black87,
-                      ),
-                      onSelected: (_) => _applyBatteryTypePreset('lead_acid'),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _isLoadingPsh
+                                    ? (_isBangla
+                                          ? 'নাসা থেকে তথ্য নেওয়া হচ্ছে...'
+                                          : 'Fetching from NASA...')
+                                    : (_pshResult?.getMessage(_isBangla) ?? ''),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF1B6A3B),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _isLoadingPsh
+                                  ? null
+                                  : _fetchNasaPshData,
+                              icon: _isLoadingPsh
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.refresh,
+                                      size: 20,
+                                      color: Color(0xFF1B6A3B),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    ChoiceChip(
-                      label: Text(
-                        _isBangla ? 'টিউবুলার / জেল' : 'Tubular / Gel',
-                      ),
-                      selected: _selectedBatteryType == 'tubular',
-                      selectedColor: const Color(0xFF1B6A3B).withAlpha(45),
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: _selectedBatteryType == 'tubular'
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: _selectedBatteryType == 'tubular'
-                            ? const Color(0xFF1B6A3B)
-                            : Colors.black87,
-                      ),
-                      onSelected: (_) => _applyBatteryTypePreset('tubular'),
-                    ),
-                    ChoiceChip(
-                      label: Text(
-                        _isBangla ? 'লিথিয়াম (LiFePO4)' : 'Lithium (LiFePO4)',
-                      ),
-                      selected: _selectedBatteryType == 'lithium',
-                      selectedColor: const Color(0xFF1B6A3B).withAlpha(45),
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: _selectedBatteryType == 'lithium'
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: _selectedBatteryType == 'lithium'
-                            ? const Color(0xFF1B6A3B)
-                            : Colors.black87,
-                      ),
-                      onSelected: (_) => _applyBatteryTypePreset('lithium'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // ব্যাটারির ধারণ ক্ষমতা (Ah)
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'ব্যাটারির ধারণ ক্ষমতা'
-                      : 'Battery Capacity',
-                  unit: 'Ah',
-                  value: _params.batteryCapacityAh,
-                  step: 10.0,
-                  min: 20.0,
-                  max: 500.0,
-                  onChanged: (v) =>
-                      setState(() => _params.batteryCapacityAh = v),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'ধারণ ক্ষমতা (Ah)'
-                        : 'Battery Capacity (Ah)',
-                    description: _isBangla
-                        ? 'দোকান হতে প্রাপ্ত ব্যাটারির গায়ের লেবেলে “--- AH” আকারে লেখা থাকে (যেমন: 100 Ah, 150 Ah)।'
-                        : 'Check your battery side sticker for nominal capacity labeled in "--- AH" (e.g. 100 Ah, 200 Ah).',
-                    parameterName: 'Nominal Capacity',
-                    sampleValue: '100 Ah / 150 Ah',
                   ),
-                ),
-                const SizedBox(height: 6),
+                  const SizedBox(height: 14),
 
-                // ডাইনামিক লোড-রেসপনসিভ ব্যাটারি Ah চিপস
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _getRecommendedBatteryCapacities().map((ah) {
-                      final isSelected = _params.batteryCapacityAh == ah;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6.0),
-                        child: ChoiceChip(
-                          label: Text('${ah.toInt()} Ah'),
-                          selected: isSelected,
-                          selectedColor: const Color(0xFF1B6A3B).withAlpha(45),
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: isSelected
-                                ? const Color(0xFF1B6A3B)
-                                : Colors.black87,
+                  // ২. ডিসি বাস ভোল্টেজ ও চার্জ কন্ট্রোলার টাইপ
+                  _buildCard(
+                    title: _isBangla
+                        ? '২. সিস্টেম ভোল্টেজ ও চার্জ কন্ট্রোলার'
+                        : '2. Voltage & Charge Controller',
+                    icon: Icons.electric_bolt_rounded,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ভোল্টেজ সিলেকশন
+                        Row(
+                          children: [12.0, 24.0, 48.0].map((v) {
+                            final isSelected = _params.systemVoltage == v;
+                            final isRec = recommendedVoltage == v;
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4.0,
+                                ),
+                                child: InkWell(
+                                  onTap: () =>
+                                      setState(() => _params.systemVoltage = v),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? const Color(0xFF1B6A3B)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? const Color(0xFF1B6A3B)
+                                            : Colors.grey.shade300,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          '${v.toInt()} V',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        if (isRec)
+                                          Text(
+                                            _isBangla
+                                                ? 'প্রস্তাবিত'
+                                                : 'Suggested',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isSelected
+                                                  ? Colors.amberAccent
+                                                  : const Color(0xFF1B6A3B),
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const Divider(height: 24),
+                        // কন্ট্রোলার টাইপ (MPPT / PWM)
+                        Text(
+                          _isBangla
+                              ? 'কন্ট্রোলারের ধরন (Topology):'
+                              : 'Controller Technology:',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
                           ),
-                          onSelected: (_) =>
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            _buildControllerTypeButton(
+                              type: 'mppt',
+                              title: 'MPPT (আধুনিক)',
+                              subtitle: _isBangla
+                                  ? 'উচ্চ দক্ষতা (৯৭-৯৯%)'
+                                  : 'High Efficiency (98%)',
+                            ),
+                            const SizedBox(width: 8),
+                            _buildControllerTypeButton(
+                              type: 'pwm',
+                              title: 'PWM (সাধারণ)',
+                              subtitle: _isBangla
+                                  ? 'বাজেট-বান্ধব (৭০-৭৫%)'
+                                  : 'Budget (70-75%)',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ৩. সোলার প্যানেল স্পেসিফিকেশন (স্টিকার গাইড সহ)
+                  _buildCard(
+                    title: _isBangla
+                        ? '৩. সোলার প্যানেল স্পেসিফিকেশন'
+                        : '3. Solar PV Specs',
+                    icon: Icons.solar_power_rounded,
+                    action: IconButton(
+                      icon: const Icon(
+                        Icons.help_outline_rounded,
+                        color: Color(0xFF1B6A3B),
+                        size: 20,
+                      ),
+                      onPressed: _showStickerHelpDialog,
+                      tooltip: _isBangla ? 'স্টিকার নির্দেশিকা' : 'Specs Guide',
+                    ),
+                    child: Column(
+                      children: [
+                        _buildPresetChips(
+                          items: _getRecommendedPanelPowers(),
+                          selectedValue: _params.panelPmax,
+                          unit: 'W',
+                          onSelected: (w) => _updatePanelParametersFromWatts(w),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildSmartSlider(
+                          label: _isBangla
+                              ? 'প্যানেল ওয়াট (Pmax)'
+                              : 'Rated Power (Pmax)',
+                          value: _params.panelPmax,
+                          min: 20.0,
+                          max: 700.0,
+                          unit: 'Wp',
+                          onChanged: (v) => _updatePanelParametersFromWatts(
+                            v.roundToDouble(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // স্টিকার ইনফো স্ট্রিপ
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6F2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                size: 14,
+                                color: Color(0xFF1B6A3B),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _isBangla
+                                      ? 'প্যানেলের পেছনের স্টিকার অনুযায়ী মান পরিবর্তন করতে বক্সে ট্যাপ করুন।'
+                                      : 'Tap on any parameter box below to enter values from panel sticker.',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF1B6A3B),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildCompactMetricField(
+                                label: 'Voc',
+                                value: '${_params.panelVoc} V',
+                                onTap: () => _openDirectValueEditor(
+                                  title: 'Voc (V)',
+                                  currentValue: _params.panelVoc,
+                                  min: 10.0,
+                                  max: 70.0,
+                                  onSubmitted: (val) =>
+                                      setState(() => _params.panelVoc = val),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildCompactMetricField(
+                                label: 'Imp',
+                                value: '${_params.panelImp} A',
+                                onTap: () => _openDirectValueEditor(
+                                  title: 'Imp (A)',
+                                  currentValue: _params.panelImp,
+                                  min: 1.0,
+                                  max: 30.0,
+                                  onSubmitted: (val) =>
+                                      setState(() => _params.panelImp = val),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildCompactMetricField(
+                                label: 'Isc',
+                                value: '${_params.panelIsc} A',
+                                onTap: () => _openDirectValueEditor(
+                                  title: 'Isc (A)',
+                                  currentValue: _params.panelIsc,
+                                  min: 1.0,
+                                  max: 35.0,
+                                  onSubmitted: (val) =>
+                                      setState(() => _params.panelIsc = val),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ৪. ব্যাটারি ব্যাংক কনফিগারেশন
+                  _buildCard(
+                    title: _isBangla
+                        ? '৪. ব্যাটারি ব্যাংক কনফিগারেশন'
+                        : '4. Battery Bank Configuration',
+                    icon: Icons.battery_charging_full_rounded,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            _buildBatteryTypeButton(
+                              'lead_acid',
+                              _isBangla ? 'লেড-এসিড' : 'Lead-Acid',
+                            ),
+                            const SizedBox(width: 6),
+                            _buildBatteryTypeButton(
+                              'tubular',
+                              _isBangla ? 'টিউবুলার' : 'Tubular',
+                            ),
+                            const SizedBox(width: 6),
+                            _buildBatteryTypeButton(
+                              'lithium',
+                              _isBangla ? 'লিথিয়াম' : 'Lithium',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _buildPresetChips(
+                          items: _getRecommendedBatteryCapacities(),
+                          selectedValue: _params.batteryCapacityAh,
+                          unit: 'Ah',
+                          onSelected: (ah) =>
                               setState(() => _params.batteryCapacityAh = ah),
                         ),
-                      );
-                    }).toList(),
+                        const SizedBox(height: 14),
+                        _buildSmartSlider(
+                          label: _isBangla
+                              ? 'ব্যাটারি ক্যাপাসিটি'
+                              : 'Battery Capacity',
+                          value: _params.batteryCapacityAh,
+                          min: 20.0,
+                          max: 400.0,
+                          unit: 'Ah',
+                          onChanged: (v) => setState(
+                            () => _params.batteryCapacityAh = v.roundToDouble(),
+                          ),
+                        ),
+                        _buildSmartSlider(
+                          label: _isBangla
+                              ? 'ব্যবহারের অংশ (DoD)'
+                              : 'Depth of Discharge (DoD)',
+                          value: _params.batteryDod,
+                          min: 20.0,
+                          max: 95.0,
+                          unit: '%',
+                          onChanged: (v) => setState(
+                            () => _params.batteryDod = v.roundToDouble(),
+                          ),
+                        ),
+                        _buildSmartSlider(
+                          label: _isBangla
+                              ? 'ব্যাটারির কর্মক্ষমতা'
+                              : 'Battery Efficiency',
+                          value: _params.batteryEfficiency,
+                          min: 50.0,
+                          max: 98.0,
+                          unit: '%',
+                          onChanged: (v) => setState(
+                            () => _params.batteryEfficiency = v.roundToDouble(),
+                          ),
+                        ),
+                        _buildSmartSlider(
+                          label: _isBangla
+                              ? 'মেঘলা দিন ব্যাকআপ'
+                              : 'Autonomy (Backup)',
+                          value: _params.autonomyDays.toDouble(),
+                          min: 1.0,
+                          max: 5.0,
+                          divisions: 4,
+                          unit: _isBangla ? 'দিন' : 'Days',
+                          onChanged: (v) =>
+                              setState(() => _params.autonomyDays = v.toInt()),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 14),
 
-                // ব্যাটারির কর্মক্ষমতা (%)
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'ব্যাটারির কর্মক্ষমতা'
-                      : 'Battery Efficiency',
-                  unit: '%',
-                  value: _params.batteryEfficiency,
-                  step: 1.0,
-                  min: 50.0,
-                  max: 98.0,
-                  onChanged: (v) =>
-                      setState(() => _params.batteryEfficiency = v),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'ব্যাটারির কর্মক্ষমতা'
-                        : 'Battery Efficiency',
-                    description: _isBangla
-                        ? 'চার্জ/রিচার্জ চক্রে ক্ষতির পরিমাপই ব্যাটারি দক্ষতা। লেড-এসিড ব্যাটারিতে প্রায় ৮০%, টিউবুলার ব্যাটারিতে ৮৫% এবং লিথিয়াম ব্যাটারিতে প্রায় ৯৫% দক্ষতা পাওয়া যায়।'
-                        : 'Efficiency measures energy recovery in charge/discharge cycles. Lead-acid is ~80%, tubular is ~85%, and lithium achieves ~95%.',
-                    parameterName: 'Cycle Efficiency',
-                    sampleValue: '80 % / 95 %',
-                  ),
-                ),
-                const SizedBox(height: 10),
+                  // ৫. ইনভার্টার স্পেসিফিকেশন (যদি এসি লোড থাকে)
+                  if (widget.acPeakWatt > 0)
+                    _buildCard(
+                      title: _isBangla
+                          ? '৫. ইনভার্টার প্যারামিটার'
+                          : '5. Inverter Settings',
+                      icon: Icons.sync_alt_rounded,
+                      child: Column(
+                        children: [
+                          _buildSmartSlider(
+                            label: _isBangla
+                                ? 'কর্মক্ষমতা (Efficiency)'
+                                : 'Efficiency',
+                            value: _params.inverterEfficiency,
+                            min: 75.0,
+                            max: 98.0,
+                            unit: '%',
+                            onChanged: (v) => setState(
+                              () => _params.inverterEfficiency = v
+                                  .roundToDouble(),
+                            ),
+                          ),
+                          _buildSmartSlider(
+                            label: _isBangla
+                                ? 'পাওয়ার ফ্যাক্টর'
+                                : 'Power Factor',
+                            value: _params.inverterPowerFactor,
+                            min: 0.70,
+                            max: 1.0,
+                            divisions: 30,
+                            unit: '',
+                            onChanged: (v) => setState(
+                              () => _params.inverterPowerFactor = double.parse(
+                                v.toStringAsFixed(2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
 
-                // ব্যবহারের অংশ (DoD %)
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'ব্যবহারের অংশ (DoD)'
-                      : 'Depth of Discharge (DoD)',
-                  unit: '%',
-                  value: _params.batteryDod,
-                  step: 5.0,
-                  min: 20.0,
-                  max: 95.0,
-                  onChanged: (v) => setState(() => _params.batteryDod = v),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'ডেপ্থ অব ডিসচার্জ (DoD)'
-                        : 'Depth of Discharge (DoD)',
-                    description: _isBangla
-                        ? 'সাধারণ লেড-এসিড ব্যাটারির প্রায় ৭০% পর্যন্ত ডিসচার্জ করা যায়। ডিপ সাইকেল ব্যাটারি দীর্ঘায়ু করতে প্রায় ৫০% রাখা হয় এবং লিথিয়াম ব্যাটারি ৮০-৯০% পর্যন্ত নিরাপদ।'
-                        : 'Indicates how deeply the battery can be safely drained. Standard lead-acid is ~70% DoD, deep-cycle tubular is ~50%, and lithium safely allows 80-90%.',
-                    parameterName: 'Depth of Discharge',
-                    sampleValue: '70 % / 50 % / 85 %',
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // মেঘলা দিনের ব্যাকআপ
-                _buildFieldWithHelp(
-                  label: _isBangla
-                      ? 'মেঘলা দিনের ব্যাকআপ'
-                      : 'Autonomy Days (Backup)',
-                  unit: _isBangla ? 'দিন' : 'Days',
-                  value: _params.autonomyDays.toDouble(),
-                  step: 1.0,
-                  min: 1.0,
-                  max: 7.0,
-                  onChanged: (v) =>
-                      setState(() => _params.autonomyDays = v.toInt()),
-                  onHelp: () => _showStickerHelpDialog(
-                    title: _isBangla
-                        ? 'মেঘলা দিন (Autonomy Days)'
-                        : 'Days of Autonomy',
-                    description: _isBangla
-                        ? 'মেঘলা বা বর্ষার দিনে রোদ না থাকলে ব্যাটারি ব্যাকআপ দেয়। সাধারণত ২ থেকে ৩ দিনের জন্য ব্যাকআপ রাখা হয়।'
-                        : 'Number of consecutive cloudy/rainy days the battery can supply power without solar input. Typical is 2 to 3 days.',
-                    parameterName: 'Days of Autonomy',
-                    sampleValue: '2 Days',
-                  ),
+          // বটম সামারি বার
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(20),
+                  blurRadius: 10,
+                  offset: const Offset(0, -3),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-
-            // ৪. ইনভার্টার স্পেসিফিকেশন (শুধুমাত্র এসি লোড থাকলেই প্রদর্শিত হবে)
-            if (widget.acPeakWatt > 0) ...[
-              _buildSectionCard(
-                title: _isBangla
-                    ? '৪. ইনভার্টার স্পেসিফিকেশন'
-                    : '4. Inverter Specifications',
-                icon: Icons.power_input,
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildFieldWithHelp(
-                    label: _isBangla
-                        ? 'ইনভার্টারের কর্মক্ষমতা'
-                        : 'Inverter Efficiency',
-                    unit: '%',
-                    value: _params.inverterEfficiency,
-                    step: 1.0,
-                    min: 70.0,
-                    max: 98.0,
-                    onChanged: (v) =>
-                        setState(() => _params.inverterEfficiency = v),
-                    onHelp: () => _showStickerHelpDialog(
-                      title: _isBangla
-                          ? 'ইনভার্টার কর্মক্ষমতা'
-                          : 'Inverter Efficiency',
-                      description: _isBangla
-                          ? 'ইনভার্টারের কর্মক্ষমতা সাধারণত ৯০% বা তার বেশি হয়ে থাকে। এটি ইনভার্টারের পেছনের নেমপ্লেটে লেখা থাকে।'
-                          : 'Inverter operating efficiency is usually 90% or higher, specified on its technical plate.',
-                      parameterName: 'Rated Efficiency',
-                      sampleValue: '90 %',
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildQuickKPI(
+                        label: _isBangla ? 'কন্ট্রোলার' : 'Controller',
+                        value: _params.controllerType.toUpperCase(),
+                        icon: Icons.tune_rounded,
+                      ),
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: Colors.grey.shade300,
+                      ),
+                      _buildQuickKPI(
+                        label: _isBangla ? 'প্যানেল সংখ্যা' : 'Est. Panels',
+                        value: '~$approxPanels pcs',
+                        icon: Icons.solar_power,
+                      ),
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: Colors.grey.shade300,
+                      ),
+                      _buildQuickKPI(
+                        label: _isBangla ? 'ব্যাটারি সংখ্যা' : 'Est. Batteries',
+                        value: '~$approxBatteries pcs',
+                        icon: Icons.battery_charging_full,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  _buildFieldWithHelp(
-                    label: _isBangla ? 'পাওয়ার ফ্যাক্টর' : 'Power Factor (PF)',
-                    unit: '',
-                    value: _params.inverterPowerFactor,
-                    step: 0.05,
-                    min: 0.60,
-                    max: 1.0,
-                    isDecimal: true,
-                    onChanged: (v) =>
-                        setState(() => _params.inverterPowerFactor = v),
-                    onHelp: () => _showStickerHelpDialog(
-                      title: _isBangla ? 'পাওয়ার ফ্যাক্টর' : 'Power Factor',
-                      description: _isBangla
-                          ? 'সক্রিয় শক্তি ও আপাত শক্তির অনুপাত। স্থানীয় বাজারে প্রাপ্ত ইনভার্টারের পাওয়ার ফ্যাক্টর সাধারণত ০.৮০ থেকে ০.৮৫ হয়ে থাকে।'
-                          : 'Ratio of real to apparent power. Commercially available inverters generally have PF around 0.80 to 0.85.',
-                      parameterName: 'Power Factor',
-                      sampleValue: '0.85',
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B6A3B),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: () {
+                        // ১. এসি ও ডিসি লোড নিখুঁতভাবে নেওয়া
+                        final double acWh = widget.dailyAcWh > 0
+                            ? widget.dailyAcWh
+                            : (widget.acPeakWatt > 0
+                                  ? widget.dailyTotalWh
+                                  : 0.0);
+                        final double dcWh = widget.dailyDcWh > 0
+                            ? widget.dailyDcWh
+                            : (widget.acPeakWatt == 0
+                                  ? widget.dailyTotalWh
+                                  : 0.0);
+
+                        // ২. ক্যালকুলেশন ইঞ্জিন কল
+                        final result = SolarCalculationService.calculate(
+                          dailyAcWh: acWh,
+                          dailyDcWh: dcWh,
+                          acPeakWatt: widget.acPeakWatt,
+                          params: _params,
+                        );
+
+                        // ৩. নেভিগেশন (প্যারামিটার নাম isBangla ব্যবহার করা হয়েছে)
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                SystemCalculationSummaryScreen(
+                                  result: result,
+                                  params: _params,
+                                  isBangla: _isBangla, // 👈 এখন এরর হবে না
+                                  onProceedToDiagram: () {
+                                    // ৩য় ধাপ: ওয়্যারিং ডায়াগ্রাম
+                                  },
+                                ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        _isBangla
+                            ? 'পরবর্তী: চূড়ান্ত হিসাব ও ডায়াগ্রাম'
+                            : 'Calculate & View Diagram',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-            ],
-
-            const SizedBox(height: 10),
-
-            // চূড়ান্ত সাইজিং ক্যালকুলেশন বাটন
-            ElevatedButton.icon(
-              onPressed: () => widget.onProceedToFinalResults(_params),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B6A3B),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 3,
-              ),
-              icon: const Icon(Icons.calculate, color: Colors.white),
-              label: Text(
-                _isBangla
-                    ? 'চূড়ান্ত সাইজিং ফলাফল দেখুন →'
-                    : 'Calculate System Sizing →',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // লোড সামারি ব্যানার
-  Widget _buildLoadBanner() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B6A3B).withAlpha(18),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF1B6A3B).withAlpha(60)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            _isBangla ? 'মোট দৈনিক লোড:' : 'Total Daily Load:',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          Text(
-            '${widget.dailyTotalWh.toStringAsFixed(1)} Wh/day',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Color(0xFF1B6A3B),
             ),
           ),
         ],
@@ -794,56 +893,115 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     );
   }
 
-  // কার্ড কন্টেইনার
-  Widget _buildSectionCard({
+  Widget _buildCard({
     required String title,
     required IconData icon,
-    required List<Widget> children,
+    required Widget child,
+    Widget? action,
   }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: const Color(0xFF1B6A3B), size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1B6A3B),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 20, color: const Color(0xFF1B6A3B)),
+                  const SizedBox(width: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14.5,
+                      color: Color(0xFF1B6A3B),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              if (action != null) action,
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControllerTypeButton({
+    required String type,
+    required String title,
+    required String subtitle,
+  }) {
+    final isSelected = _params.controllerType == type;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _params.controllerType = type),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF1B6A3B).withAlpha(20)
+                : const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF1B6A3B)
+                  : Colors.grey.shade300,
+              width: 1.5,
             ),
-            const Divider(height: 18),
-            ...children,
-          ],
+          ),
+          child: Column(
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isSelected ? const Color(0xFF1B6A3B) : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: isSelected
+                      ? const Color(0xFF1B6A3B)
+                      : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // লোড অনুযায়ী স্বয়ংক্রিয় প্রস্তাবিত ভোল্টেজ নির্ধারণ
-  double _getRecommendedVoltage() {
-    if (widget.dailyTotalWh <= 1500 && widget.acPeakWatt <= 1000) {
-      return 12.0;
-    } else if (widget.dailyTotalWh <= 3000 && widget.acPeakWatt <= 2500) {
-      return 24.0;
-    } else {
-      return 48.0;
-    }
-  }
-
-  Widget _buildSystemVoltageSelector() {
-    final double recommended = _getRecommendedVoltage();
-
+  Widget _buildSmartSlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required String unit,
+    int? divisions,
+    required ValueChanged<double> onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -851,179 +1009,201 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _isBangla ? 'সিস্টেম ভোল্টেজ (V)' : 'System Voltage (V)',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            IconButton(
-              icon: const Icon(
-                Icons.info_outline,
-                size: 18,
-                color: Colors.blueGrey,
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
               ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              onPressed: () => _showStickerHelpDialog(
-                title: _isBangla
-                    ? 'সিস্টেম ভোল্টেজ নির্দেশিকা'
-                    : 'System Voltage Guide',
-                description: _isBangla
-                    ? '• ১২ V: দৈনিক ১৫০০ Wh বা ১০০০ W লোড পর্যন্ত।\n'
-                          '• ২৪ V: দৈনিক ১৫০০ ~ ৩০০০ Wh বা ১০০০ ~ ২৫০০ W লোডের জন্য।\n'
-                          '• ৪৮ V: দৈনিক ৩০০০ Wh বা ২৫০০ W-এর বেশি লোডের জন্য।\n\n'
-                          'উচ্চ ক্ষমতায় উচ্চ ভোল্টেজ গ্রহণ করলে তারের কারেন্ট (I = P/V) ও অপচয় সর্বনিম্ন থাকে।'
-                    : '• 12 V: Up to 1500 Wh/day or <= 1000 W peak load.\n'
-                          '• 24 V: 1500 ~ 3000 Wh/day or 1000 ~ 2500 W load.\n'
-                          '• 48 V: > 3000 Wh/day or > 2500 W high load.\n\n'
-                          'Higher voltage minimizes cable amperage and system heat losses.',
-                parameterName: 'Recommended DC Bus',
-                sampleValue: '${recommended.toInt()} V',
+            ),
+            InkWell(
+              onTap: () => _openDirectValueEditor(
+                title: label,
+                currentValue: value,
+                min: min,
+                max: max,
+                onSubmitted: onChanged,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6F2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF1B6A3B).withAlpha(40),
+                  ),
+                ),
+                child: Text(
+                  unit.isNotEmpty ? '$value $unit' : '$value',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B6A3B),
+                  ),
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 10,
-          children: [12.0, 24.0, 48.0].map((v) {
-            final isSelected = _params.systemVoltage == v;
-            final isRecommended = recommended == v;
-
-            return ChoiceChip(
-              label: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${v.toInt()} V'),
-                  if (isRecommended) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.star, size: 14, color: Color(0xFFD97706)),
-                  ],
-                ],
-              ),
-              selected: isSelected,
-              selectedColor: const Color(0xFF1B6A3B).withAlpha(45),
-              labelStyle: TextStyle(
-                fontSize: 12.5,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? const Color(0xFF1B6A3B) : Colors.black87,
-              ),
-              onSelected: (val) {
-                if (val) setState(() => _params.systemVoltage = v);
-              },
-            );
-          }).toList(),
-        ),
-        if (_params.systemVoltage < recommended) ...[
-          const SizedBox(height: 6),
-          Text(
-            _isBangla
-                ? '⚠️ আপনার লোডের জন্য ${_params.systemVoltage.toInt()}V-এ তারের কারেন্ট অনেক বেশি হবে। ${recommended.toInt()}V ব্যবহারের সুপারিশ করা হচ্ছে।'
-                : '⚠️ For this load, ${_params.systemVoltage.toInt()}V requires very thick cables. ${recommended.toInt()}V is recommended.',
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: Color(0xFFD97706),
-              fontWeight: FontWeight.w500,
-            ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: const Color(0xFF1B6A3B),
+            inactiveTrackColor: const Color(0xFFE5E7EB),
+            thumbColor: const Color(0xFF1B6A3B),
+            overlayColor: const Color(0xFF1B6A3B).withAlpha(30),
+            trackHeight: 4,
           ),
-        ],
-      ],
-    );
-  }
-
-  // সৌর সময় ও নাসা লোকেশন ইনপুট
-  Widget _buildPeakSunHoursInput() {
-    String displayMessage = '';
-    if (_isLoadingPsh) {
-      displayMessage = _isBangla
-          ? 'নাসা (NASA) ডেটাবেজ হতে সৌর-তথ্য খোঁজা হচ্ছে...'
-          : 'Fetching solar data from NASA database...';
-    } else if (_pshResult != null) {
-      displayMessage = _pshResult!.getMessage(_isBangla);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: DragSpinInputField(
-                label: _isBangla
-                    ? 'গড়পড়তা সৌর-সময় (ঘণ্টা)'
-                    : 'Peak Sun Hours (h)',
-                value: _params.peakSunHours,
-                step: 0.1,
-                min: 1.0,
-                max: 10.0,
-                isDecimal: true,
-                onChanged: (v) => setState(() => _params.peakSunHours = v),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: _isLoadingPsh
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location, color: Color(0xFF1B6A3B)),
-              tooltip: _isBangla
-                  ? 'নাসা থেকে রিফ্রেশ করুন'
-                  : 'Refresh from NASA',
-              onPressed: _isLoadingPsh ? null : _fetchNasaPshData,
-            ),
-          ],
-        ),
-        if (displayMessage.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            displayMessage,
-            style: TextStyle(
-              fontSize: 11,
-              color: _isLoadingPsh
-                  ? Colors.blue.shade800
-                  : Colors.teal.shade800,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  // ফিল্ডের সাথে হেল্প আইকন বাটন
-  Widget _buildFieldWithHelp({
-    required String label,
-    required String unit,
-    required double value,
-    required double step,
-    required double min,
-    required double max,
-    bool isDecimal = false,
-    required ValueChanged<double> onChanged,
-    required VoidCallback onHelp,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          child: DragSpinInputField(
-            label: unit.isNotEmpty ? '$label ($unit)' : label,
-            value: value,
-            step: step,
+          child: Slider(
+            value: value.clamp(min, max),
             min: min,
             max: max,
-            isDecimal: isDecimal,
+            divisions: divisions,
             onChanged: onChanged,
           ),
         ),
-        IconButton(
-          icon: const Icon(
-            Icons.help_outline,
-            color: Colors.blueGrey,
-            size: 20,
+      ],
+    );
+  }
+
+  Widget _buildPresetChips({
+    required List<double> items,
+    required double selectedValue,
+    required String unit,
+    required ValueChanged<double> onSelected,
+  }) {
+    return Row(
+      children: items.map((val) {
+        final isSelected = selectedValue == val;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3.0),
+            child: ChoiceChip(
+              label: Center(
+                child: Text(
+                  '${val.toInt()} $unit',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: isSelected ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              selected: isSelected,
+              selectedColor: const Color(0xFF1B6A3B),
+              backgroundColor: const Color(0xFFF3F4F6),
+              showCheckmark: false,
+              padding: EdgeInsets.zero,
+              onSelected: (_) => onSelected(val),
+            ),
           ),
-          tooltip: _isBangla ? 'নির্দেশনা দেখুন' : 'View Guide',
-          onPressed: onHelp,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildBatteryTypeButton(String key, String label) {
+    final isSelected = _selectedBatteryType == key;
+    return Expanded(
+      child: InkWell(
+        onTap: () => _applyBatteryTypePreset(key),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF1B6A3B).withAlpha(25)
+                : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF1B6A3B) : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? const Color(0xFF1B6A3B) : Colors.black87,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactMetricField({
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickKPI({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFF1B6A3B)),
+        const SizedBox(width: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
         ),
       ],
     );
