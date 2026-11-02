@@ -69,7 +69,7 @@ class FabMenu extends StatelessWidget {
             onTap: () => onSelectOption('Based on cost'),
           ),
           _buildItem(
-            title: isBangla ? 'ক্ষমতাভিত্তিক' : 'Based on capacity',
+            title: isBangla ? 'চাহিদাভিত্তিক' : 'Based on capacity',
             imagePath: AppAssets.menuCapacity,
             fallbackText: 'kW',
             onTap: () => onSelectOption('Based on capacity'),

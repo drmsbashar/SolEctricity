@@ -175,7 +175,7 @@ class AppDrawer extends StatelessWidget {
                       _buildSubItem(
                         iconPath: AppAssets.iconCapacity,
                         fallbackIcon: Icons.flash_on_rounded,
-                        title: isBangla ? 'ক্ষমতাভিত্তিক' : 'Based on capacity',
+                        title: isBangla ? 'চাহিদাভিত্তিক' : 'Based on capacity',
                         onTap: () {
                           Navigator.pop(context);
                           onNavigate('Based on capacity');

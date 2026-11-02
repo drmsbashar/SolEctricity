@@ -14,6 +14,8 @@ import 'about_screen.dart';
 import 'license_screen.dart';
 import 'load_selection_screen.dart';
 import 'land_based_solar_screen.dart';
+import 'capacity_based_solar_screen.dart';
+import 'cost_based_solar_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -349,6 +351,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => LandBasedSolarScreen(isBangla: isBangla),
+        ),
+      );
+      return;
+    }
+
+    // 💰 খরচভিত্তিক / Based on cost স্ক্রিনে যাওয়া
+    if (lower.contains('cost') ||
+        lower.contains('budget') ||
+        lower.contains('price') ||
+        option.contains('খরচ') ||
+        option.contains('বাজেট') ||
+        option.contains('খরচভিত্তিক')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CostBasedSolarScreen(
+            isBangla: isBangla,
+            onToggleLanguage: toggleLanguage,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // ⚡ ক্ষমতাভিত্তিক / Based on capacity স্ক্রিনে যাওয়া
+    if (lower.contains('capacity') ||
+        lower.contains('demand') ||
+        option.contains('ক্ষমতা') ||
+        option.contains('চাহিদা') ||
+        option.contains('চাহিদাভিত্তিক')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CapacityBasedSolarScreen(
+            isBangla: isBangla,
+            onToggleLanguage: toggleLanguage,
+          ),
         ),
       );
       return;
