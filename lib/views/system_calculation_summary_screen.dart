@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
+import '../services/pdf_report_service.dart';
 import 'system_diagram_screen.dart';
 
 class SystemCalculationSummaryScreen extends StatefulWidget {
@@ -63,6 +64,15 @@ class _SystemCalculationSummaryScreenState
           ),
         ),
         actions: [
+          // 📄 নতুন যোগ করা পিডিএফ শেয়ার বাটন:
+          IconButton(
+            tooltip: _isBangla ? 'রিপোর্ট শেয়ার করুন' : 'Share PDF Report',
+            icon: const Icon(Icons.share_rounded, color: Colors.white),
+            onPressed: () {
+              PdfReportService.shareOrPrintReport(result, params, _isBangla);
+            },
+          ),
+          // পূর্বে থাকা ভাষা পরিবর্তন বাটন:
           IconButton(
             onPressed: _toggleLanguage,
             icon: Container(
@@ -80,6 +90,14 @@ class _SystemCalculationSummaryScreenState
                 ),
               ),
             ),
+          ),
+          IconButton(
+            tooltip: _isBangla ? 'হোম / ড্যাশবোর্ড' : 'Dashboard / Home',
+            icon: const Icon(Icons.home_rounded, color: Colors.white),
+            onPressed: () {
+              // 💡 সরাসরি নেভিগেশন স্ট্যাকের প্রথম পেজে (Dashboard) ফিরে যাওয়ার কমান্ড
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
           ),
         ],
       ),

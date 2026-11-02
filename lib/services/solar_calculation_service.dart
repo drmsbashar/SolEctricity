@@ -18,9 +18,7 @@ class SolarCalculationService {
     final bool isHybrid = params.systemType == SolarSystemType.hybrid;
 
     final bool hasAc = dailyAcWh > 0 || acPeakWatt > 0 || isGridTied;
-    final bool hasDc =
-        dailyDcWh > 0 &&
-        !isGridTied; // অন-গ্রিডে সাধারণত সরাসরি ডিসি লোড থাকে না
+    final bool hasDc = dailyDcWh > 0 && !isGridTied;
 
     final double inverterEff = (params.inverterEfficiency > 0)
         ? (params.inverterEfficiency / 100.0)
@@ -28,14 +26,15 @@ class SolarCalculationService {
     final double effectiveAcWh = hasAc ? (dailyAcWh / inverterEff) : 0.0;
     final double totalDailyWh = dailyDcWh + effectiveAcWh;
 
-    final double energyDemandAh = (params.systemVoltage > 0)
+    // ১. Ah ডিমান্ড (অন-গ্রিডে ব্যাটারি বাস না থাকায় Ah = 0)
+    final double energyDemandAh = (!isGridTied && params.systemVoltage > 0)
         ? (totalDailyWh / params.systemVoltage)
         : 0.0;
 
-    // ১. সৌর প্যানেলের মোট ক্ষমতা হিসাব
+    // ২. সৌর প্যানেলের মোট ক্ষমতা হিসাব
     final double batEff = (!isGridTied && params.batteryEfficiency > 0)
         ? (params.batteryEfficiency / 100.0)
-        : 1.0; // অন-গ্রিডে ব্যাটারি না থাকায় ব্যাটারি লস ১.০
+        : 1.0; // অন-গ্রিডে ব্যাটারি অপচয় নেই
 
     final double overallGenEfficiency =
         batEff * bosEfficiency * tempDeratingFactor;
@@ -44,13 +43,19 @@ class SolarCalculationService {
     final double requiredDailyWh = totalDailyWh / overallGenEfficiency;
     final double requiredPvWatt = requiredDailyWh / psh;
 
-    // ২. প্যানেল সিরিজ ও প্যারালাল কনফিগারেশন
+    // মোট ন্যূনতম প্যানেল সংখ্যা আগে বের করা হলো
+    final int minPanels = (params.panelPmax > 0)
+        ? (requiredPvWatt / params.panelPmax).ceil()
+        : 1;
+
+    // ৩. প্যানেল সিরিজ (pvs) নির্ধারণ (লজিক্যাল সংশোধন)
     int pvs = 1;
     final double panelVmp = params.panelVmp > 0 ? params.panelVmp : 18.0;
 
     if (isGridTied) {
-      // অন-গ্রিড স্ট্রিং ইনভার্টারের জন্য সাধারণত উচ্চ ভোল্টেজ স্ট্রিং হয় (যেমন: Voc ১৫০V-৫০০V)
-      pvs = (panelVmp < 35.0) ? 6 : 4;
+      // অন-গ্রিডে মোট প্যানেলের চেয়ে সিরিজ যেন বেশি না হয়
+      final int idealGridSeries = (panelVmp < 35.0) ? 6 : 4;
+      pvs = math.max(1, math.min(minPanels, idealGridSeries));
     } else if (params.controllerType == 'pwm' && !isHybrid) {
       pvs = math.max(
         1,
@@ -60,19 +65,18 @@ class SolarCalculationService {
         pvs = 1;
       }
     } else {
-      // MPPT বা Hybrid ইনভার্টারের জন্য
+      // MPPT এবং হাইব্রিড ইনভার্টারের জন্য নির্ভুল ভোল্টেজ ম্যাপিং
       if (params.systemVoltage == 12.0) {
         pvs = (panelVmp < 25.0) ? 2 : 1;
       } else if (params.systemVoltage == 24.0) {
-        pvs = (panelVmp < 25.0) ? 2 : 2;
+        pvs = (panelVmp < 30.0)
+            ? 2
+            : 1; // 👈 ফিক্সড: ৩০V এর নিচে হলে ২টি, বেশি হলে ১টি
       } else {
-        pvs = (panelVmp < 25.0) ? 4 : 3;
+        pvs = (panelVmp < 25.0) ? 4 : 2;
       }
+      pvs = math.max(1, math.min(minPanels, pvs));
     }
-
-    final int minPanels = (params.panelPmax > 0)
-        ? (requiredPvWatt / params.panelPmax).ceil()
-        : 1;
 
     int pvp = (minPanels / pvs).ceil();
     if (pvp < 1) pvp = 1;
@@ -84,7 +88,7 @@ class SolarCalculationService {
     final double arrayImp = pvp * params.panelImp;
     final double arrayIsc = pvp * params.panelIsc;
 
-    // ৩. ব্যাটারি ব্যাংক হিসাব (অন-গ্রিড হলে সম্পূর্ণ শূন্য)
+    // ৪. ব্যাটারি ব্যাংক হিসাব (অন-গ্রিডে সম্পূর্ণ ০)
     double totalRequiredBatAh = 0.0;
     int batSeries = 0;
     int batParallel = 0;
@@ -113,7 +117,7 @@ class SolarCalculationService {
       totalBatteries = batSeries * batParallel;
     }
 
-    // ৪. চার্জ কন্ট্রোলার হিসাব (অন-গ্রিড হলে প্রযোজ্য নয়)
+    // ৫. চার্জ কন্ট্রোলার কারেন্ট (অন-গ্রিডে N/A)
     double controllerAmpere = 0.0;
     if (!isGridTied) {
       if (params.controllerType == 'pwm' && !isHybrid) {
@@ -124,17 +128,15 @@ class SolarCalculationService {
       controllerAmpere = double.parse(controllerAmpere.toStringAsFixed(1));
     }
 
-    // ৫. ইনভার্টার ক্ষমতা নির্ধারণ
+    // ৬. ইনভার্টার ক্ষমতা নির্ধারণ (অন-গ্রিডে সরাসরি kW রেটিং)
     double inverterCapacityVa = 0.0;
     final double pf = (params.inverterPowerFactor > 0)
         ? params.inverterPowerFactor
         : 0.85;
 
     if (isGridTied) {
-      // অন-গ্রিড ইনভার্টার সাধারণত পিভি অ্যারের ক্ষমতা এবং লোডের সর্বোচ্চ মান অনুযায়ী হয়
-      final double peakLoadVa = (acPeakWatt > 0) ? (acPeakWatt / pf) : 0.0;
-      final double arrayVa = totalArrayWatt / pf;
-      inverterCapacityVa = math.max(peakLoadVa * 1.25, arrayVa);
+      // অন-গ্রিড ইনভার্টার সরাসরি পিভি অ্যারের ওয়াট রেটিং অনুযায়ী হয় (PF বিভাজন অপ্রয়োজনীয়)
+      inverterCapacityVa = totalArrayWatt;
     } else if (hasAc) {
       inverterCapacityVa = (acPeakWatt * 1.25) / pf;
     }
@@ -143,35 +145,35 @@ class SolarCalculationService {
     // ==========================================
     // 🛡️ সুরক্ষাব্যবস্থা হিসাব (Protection Sizing)
     // ==========================================
-    // ১. পিভি ডিসি ব্রেকার (Isc * 1.25)
+    // ১. পিভি ডিসি ব্রেকার
     final double calculatedPvBreaker = arrayIsc * 1.25;
     final double pvBreakerAmp = _getStandardBreakerRating(calculatedPvBreaker);
 
-    // ২. কন্ট্রোলার টু ব্যাটারি ব্রেকার
-    final double chargeControllerBreakerAmp = !isGridTied
+    // ২. কন্ট্রোলার টু ব্যাটারি ব্রেকার (হাইব্রিড বা অন-গ্রিডে প্রয়োজন নেই)
+    final double chargeControllerBreakerAmp = (!isGridTied && !isHybrid)
         ? _getStandardBreakerRating(controllerAmpere * 1.15)
         : 0.0;
 
-    // ৩. ব্যাটারি থেকে ইনভার্টার ফিউজ
+    // ৩. ব্যাটারি ডিসি ফিউজ (অন-গ্রিডে ০)
     double batteryFuseAmp = 0.0;
     if (!isGridTied) {
       if (hasAc && params.systemVoltage > 0) {
-        final double maxBatteryDischargeCurrent =
+        final double maxDischargeCurrent =
             (inverterCapacityVa * 1.25) / (params.systemVoltage * inverterEff);
-        batteryFuseAmp = _getStandardFuseRating(maxBatteryDischargeCurrent);
+        batteryFuseAmp = _getStandardFuseRating(maxDischargeCurrent);
       } else {
         batteryFuseAmp = _getStandardFuseRating(controllerAmpere * 1.25);
       }
     }
 
-    // ৪. ইনভার্টার এসি আউটপুট ব্রেকার (220V AC)
+    // ৪. এসি ব্রেকার (220V)
     double acBreakerAmp = 0.0;
     if (hasAc) {
       final double acCurrent = inverterCapacityVa / 220.0;
       acBreakerAmp = _getStandardBreakerRating(acCurrent * 1.25);
     }
 
-    // ৫. কপার ক্যাবল সাইজ নির্ধারণ (mm²)
+    // ৫. ক্যাবল সাইজ
     final String pvCableSizeMm = _determinePvCableSize(arrayIsc);
     final String batteryCableSizeMm = !isGridTied
         ? _determineBatteryCableSize(

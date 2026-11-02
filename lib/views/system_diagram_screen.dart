@@ -1,8 +1,13 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
+import '../services/pdf_report_service.dart';
 import 'widgets/wiring_painters.dart';
 
 class SystemDiagramScreen extends StatefulWidget {
@@ -25,32 +30,12 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
   late bool _isBangla;
   final TransformationController _mainCanvasController =
       TransformationController();
+  final GlobalKey _diagramCanvasKey = GlobalKey(); // 👈 ক্যানভাস ক্যাপচার কী
   bool _isLandscape = false;
+  bool _isExporting = false;
 
-  static const double baseWidth = 1180.0;
-  static const double baseHeight = 620.0;
-
-  // অফ-গ্রিড অবস্থানসমূহ
-  static const offGridPvRect = Rect.fromLTWH(30, 60, 220, 180);
-  static const offGridControllerRect = Rect.fromLTWH(360, 70, 220, 160);
-  static const offGridBatteryRect = Rect.fromLTWH(360, 390, 220, 160);
-  static const offGridInverterRect = Rect.fromLTWH(660, 390, 210, 160);
-  static const offGridDcLoadRect = Rect.fromLTWH(690, 70, 190, 140);
-  static const offGridAcLoadRect = Rect.fromLTWH(960, 390, 180, 160);
-
-  // হাইব্রিড অবস্থানসমূহ
-  static const hybridPvRect = Rect.fromLTWH(30, 70, 220, 180);
-  static const hybridBatteryRect = Rect.fromLTWH(30, 360, 220, 160);
-  static const hybridInvRect = Rect.fromLTWH(380, 150, 260, 260);
-  static const hybridAcLoadRect = Rect.fromLTWH(780, 80, 200, 150);
-  static const hybridGridRect = Rect.fromLTWH(780, 330, 200, 150);
-
-  // অন-গ্রিড অবস্থানসমূহ
-  static const gridTiedPvRect = Rect.fromLTWH(30, 180, 220, 180);
-  static const gridTiedInvRect = Rect.fromLTWH(340, 180, 220, 180);
-  static const gridTiedMeterRect = Rect.fromLTWH(640, 190, 190, 160);
-  static const gridTiedAcLoadRect = Rect.fromLTWH(920, 70, 190, 150);
-  static const gridTiedGridRect = Rect.fromLTWH(920, 310, 190, 150);
+  static const double vWidth = 1140.0;
+  static const double vHeight = 620.0;
 
   @override
   void initState() {
@@ -88,6 +73,37 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
 
   void _resetZoom() {
     _mainCanvasController.value = Matrix4.identity();
+  }
+
+  // 📸 ডায়াগ্রাম ক্যানভাসকে ছবিতে ক্যাপচার করার মেথড
+  Future<Uint8List?> _captureDiagramPng() async {
+    try {
+      final boundary =
+          _diagramCanvasKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(
+        pixelRatio: 2.0,
+      ); // 2x শার্প রেজোলিউশন
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _handlePdfExport() async {
+    setState(() => _isExporting = true);
+    final diagramBytes = await _captureDiagramPng();
+    if (mounted) {
+      setState(() => _isExporting = false);
+      await PdfReportService.shareOrPrintReport(
+        widget.result,
+        widget.params,
+        _isBangla,
+        diagramImageBytes: diagramBytes,
+      );
+    }
   }
 
   void _showDetailModal({
@@ -436,7 +452,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                     ? '• অন-গ্রিড স্ট্রিং ইনভার্টার সোলার ডিসি ভোল্টেজকে সিনক্রোনাইজ করে ২২০V এসিতে রূপান্তর করে।\n• এর আউটপুট সরাসরি নেট-মিটার হয়ে মূল ডিস্ট্রিবিউশন বোর্ডে যুক্ত হয়।\n• গ্রিড অফ থাকলে নিরাপত্তা স্বার্থে এটি স্বয়ংক্রিয়ভাবে বন্ধ (Anti-Islanding) হয়ে যায়।'
                     : '• Grid-Tied Inverter synchronizes solar DC power to 220V grid AC.\n• Output directly connects to Net-Meter.\n• Features Anti-Islanding safety protection.')
               : (_isBangla
-                    ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিটিভ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
+                    ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিティブ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
                     : '• Inverter DC input connects directly to the Battery Bank (NEVER into charge controller DC load port!).\n• Install a ≥ ${widget.result.batteryFuseAmp.toInt()}A DC Fuse on the battery positive line.\n• AC 220V output routes to your home AC loads.'),
           style: const TextStyle(
             color: Colors.white70,
@@ -619,6 +635,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             ),
             onPressed: _toggleOrientation,
           ),
+
           IconButton(
             tooltip: _isBangla ? 'রিসেট ভিউ' : 'Reset View',
             icon: const Icon(
@@ -626,6 +643,23 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               color: Colors.white70,
             ),
             onPressed: _resetZoom,
+          ),
+          // 📄 ডায়াগ্রামের ছবিসহ পূর্ণাঙ্গ রিপোর্ট এক্সপোর্ট বাটন
+          IconButton(
+            tooltip: _isBangla
+                ? 'ডায়াগ্রামসহ রিপোর্ট শেয়ার'
+                : 'Share Full Report with Diagram',
+            icon: _isExporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.share_rounded, color: Colors.white),
+            onPressed: _isExporting ? null : _handlePdfExport,
           ),
           IconButton(
             onPressed: () => setState(() => _isBangla = !_isBangla),
@@ -645,12 +679,119 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ),
             ),
           ),
+          IconButton(
+            tooltip: _isBangla ? 'হোম / ড্যাশবোর্ড' : 'Dashboard / Home',
+            icon: const Icon(Icons.home_rounded, color: Colors.white),
+            onPressed: () {
+              // 💡 সরাসরি নেভিগেশন স্ট্যাকের প্রথম পেজে (Dashboard) ফিরে যাওয়ার কমান্ড
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          ),
         ],
       ),
       body: Stack(
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
+              final offGridPvRect = Rect.fromLTWH(
+                vWidth * 0.025,
+                vHeight * 0.10,
+                vWidth * 0.19,
+                vHeight * 0.32,
+              );
+              final offGridControllerRect = Rect.fromLTWH(
+                vWidth * 0.31,
+                vHeight * 0.11,
+                vWidth * 0.19,
+                vHeight * 0.28,
+              );
+              final offGridBatteryRect = Rect.fromLTWH(
+                vWidth * 0.31,
+                vHeight * 0.63,
+                vWidth * 0.19,
+                vHeight * 0.28,
+              );
+              final offGridInverterRect = Rect.fromLTWH(
+                vWidth * 0.57,
+                vHeight * 0.63,
+                vWidth * 0.18,
+                vHeight * 0.28,
+              );
+              final offGridDcLoadRect = Rect.fromLTWH(
+                vWidth * 0.60,
+                vHeight * 0.11,
+                vWidth * 0.16,
+                vHeight * 0.25,
+              );
+              final offGridAcLoadRect = Rect.fromLTWH(
+                vWidth * 0.83,
+                vHeight * 0.63,
+                vWidth * 0.15,
+                vHeight * 0.28,
+              );
+
+              final hybridPvRect = Rect.fromLTWH(
+                vWidth * 0.025,
+                vHeight * 0.11,
+                vWidth * 0.19,
+                vHeight * 0.32,
+              );
+              final hybridBatteryRect = Rect.fromLTWH(
+                vWidth * 0.025,
+                vHeight * 0.58,
+                vWidth * 0.19,
+                vHeight * 0.28,
+              );
+              final hybridInvRect = Rect.fromLTWH(
+                vWidth * 0.33,
+                vHeight * 0.24,
+                vWidth * 0.23,
+                vHeight * 0.50,
+              );
+              final hybridAcLoadRect = Rect.fromLTWH(
+                vWidth * 0.68,
+                vHeight * 0.13,
+                vWidth * 0.18,
+                vHeight * 0.26,
+              );
+              final hybridGridRect = Rect.fromLTWH(
+                vWidth * 0.68,
+                vHeight * 0.55,
+                vWidth * 0.18,
+                vHeight * 0.26,
+              );
+
+              final gridTiedPvRect = Rect.fromLTWH(
+                vWidth * 0.025,
+                vHeight * 0.28,
+                vWidth * 0.19,
+                vHeight * 0.35,
+              );
+              final gridTiedInvRect = Rect.fromLTWH(
+                vWidth * 0.29,
+                vHeight * 0.28,
+                vWidth * 0.19,
+                vHeight * 0.35,
+              );
+              final gridTiedMeterRect = Rect.fromLTWH(
+                vWidth * 0.55,
+                vHeight * 0.30,
+                vWidth * 0.17,
+                vHeight * 0.30,
+              );
+              final gridTiedAcLoadRect = Rect.fromLTWH(
+                vWidth * 0.79,
+                vHeight * 0.12,
+                vWidth * 0.18,
+                vHeight * 0.26,
+              );
+              final gridTiedGridRect = Rect.fromLTWH(
+                vWidth * 0.79,
+                vHeight * 0.53,
+                vWidth * 0.18,
+                vHeight * 0.26,
+              );
+
               return InteractiveViewer(
                 transformationController: _mainCanvasController,
                 minScale: 0.5,
@@ -663,156 +804,161 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 60),
                       child: FittedBox(
                         fit: BoxFit.contain,
-                        child: Container(
-                          width: baseWidth,
-                          height: baseHeight,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF131D31),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: Colors.white.withAlpha(20),
+                        // 📸 RepaintBoundary দিয়ে ফ্রেম র‍্যাপ করা হয়েছে
+                        child: RepaintBoundary(
+                          key: _diagramCanvasKey,
+                          child: Container(
+                            width: vWidth,
+                            height: vHeight,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF131D31),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Colors.white.withAlpha(20),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(120),
+                                  blurRadius: 25,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withAlpha(120),
-                                blurRadius: 25,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            children: [
-                              CustomPaint(
-                                size: const Size(baseWidth, baseHeight),
-                                painter: SolarRealisticWiringPainter(
-                                  result: result,
-                                  params: params,
-                                  isBangla: _isBangla,
+                            child: Stack(
+                              children: [
+                                CustomPaint(
+                                  size: const Size(vWidth, vHeight),
+                                  painter: SolarRealisticWiringPainter(
+                                    result: result,
+                                    params: params,
+                                    isBangla: _isBangla,
+                                  ),
                                 ),
-                              ),
 
-                              // ১. অফ-গ্রিড টাচ হটস্পটসমূহ
-                              if (!isGridTied && !isHybrid) ...[
-                                _buildTouchOverlay(
-                                  offGridPvRect,
-                                  _openPvWiringGuide,
-                                  _isBangla
-                                      ? 'টাচ: প্যানেল সংযোগ'
-                                      : 'Tap: PV Wiring',
-                                ),
-                                _buildTouchOverlay(
-                                  offGridControllerRect,
-                                  _openControllerGuide,
-                                  _isBangla ? 'টাচ: পোর্ট গাইড' : 'Tap: Ports',
-                                ),
-                                _buildTouchOverlay(
-                                  offGridBatteryRect,
-                                  _openBatteryWiringGuide,
-                                  _isBangla
-                                      ? 'টাচ: ব্যাটারি সংযোগ'
-                                      : 'Tap: Battery Wiring',
-                                ),
-                                if (result.hasAcLoad) ...[
+                                // ১. অফ-গ্রিড টাচ হটস্পটসমূহ
+                                if (!isGridTied && !isHybrid) ...[
                                   _buildTouchOverlay(
-                                    offGridInverterRect,
+                                    offGridPvRect,
+                                    _openPvWiringGuide,
+                                    _isBangla
+                                        ? 'টাচ: প্যানেল সংযোগ'
+                                        : 'Tap: PV Wiring',
+                                  ),
+                                  _buildTouchOverlay(
+                                    offGridControllerRect,
+                                    _openControllerGuide,
+                                    _isBangla
+                                        ? 'টাচ: পোর্ট গাইড'
+                                        : 'Tap: Ports',
+                                  ),
+                                  _buildTouchOverlay(
+                                    offGridBatteryRect,
+                                    _openBatteryWiringGuide,
+                                    _isBangla
+                                        ? 'টাচ: ব্যাটারি সংযোগ'
+                                        : 'Tap: Battery Wiring',
+                                  ),
+                                  if (result.hasAcLoad) ...[
+                                    _buildTouchOverlay(
+                                      offGridInverterRect,
+                                      _openInverterGuide,
+                                      _isBangla
+                                          ? 'টাচ: ইনভার্টার গাইড'
+                                          : 'Tap: Inverter Guide',
+                                    ),
+                                    _buildTouchOverlay(
+                                      offGridAcLoadRect,
+                                      _openAcLoadGuide,
+                                      _isBangla
+                                          ? 'টাচ: এসি লোড গাইড'
+                                          : 'Tap: AC Loads',
+                                    ),
+                                  ],
+                                  if (result.hasDcLoad)
+                                    _buildTouchOverlay(
+                                      offGridDcLoadRect,
+                                      _openDcLoadGuide,
+                                      _isBangla
+                                          ? 'টাচ: ডিসি লোড গাইড'
+                                          : 'Tap: DC Loads',
+                                    ),
+                                ],
+
+                                // ২. হাইব্রিড টাচ হটস্পটসমূহ
+                                if (isHybrid) ...[
+                                  _buildTouchOverlay(
+                                    hybridPvRect,
+                                    _openPvWiringGuide,
+                                    _isBangla
+                                        ? 'টাচ: প্যানেল সংযোগ'
+                                        : 'Tap: PV Wiring',
+                                  ),
+                                  _buildTouchOverlay(
+                                    hybridBatteryRect,
+                                    _openBatteryWiringGuide,
+                                    _isBangla
+                                        ? 'টাচ: ব্যাটারি সংযোগ'
+                                        : 'Tap: Battery Wiring',
+                                  ),
+                                  _buildTouchOverlay(
+                                    hybridInvRect,
+                                    _openHybridInverterGuide,
+                                    _isBangla
+                                        ? 'টাচ: হাইব্রিড গাইড'
+                                        : 'Tap: Hybrid Inverter',
+                                  ),
+                                  _buildTouchOverlay(
+                                    hybridAcLoadRect,
+                                    _openAcLoadGuide,
+                                    _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
+                                  ),
+                                  _buildTouchOverlay(
+                                    hybridGridRect,
+                                    _openNationalGridGuide,
+                                    _isBangla
+                                        ? 'টাচ: গ্রিড তথ্য'
+                                        : 'Tap: Utility Grid',
+                                  ),
+                                ],
+
+                                // ৩. অন-গ্রিড টাচ হটস্পটসমূহ
+                                if (isGridTied) ...[
+                                  _buildTouchOverlay(
+                                    gridTiedPvRect,
+                                    _openPvWiringGuide,
+                                    _isBangla
+                                        ? 'টাচ: প্যানেল সংযোগ'
+                                        : 'Tap: PV Wiring',
+                                  ),
+                                  _buildTouchOverlay(
+                                    gridTiedInvRect,
                                     _openInverterGuide,
                                     _isBangla
-                                        ? 'টাচ: ইনভার্টার গাইড'
+                                        ? 'টাচ: অন-গ্রিড ইনভার্টার'
                                         : 'Tap: Inverter Guide',
                                   ),
                                   _buildTouchOverlay(
-                                    offGridAcLoadRect,
-                                    _openAcLoadGuide,
+                                    gridTiedMeterRect,
+                                    _openNetMeterGuide,
                                     _isBangla
-                                        ? 'টাচ: এসি লোড গাইড'
-                                        : 'Tap: AC Loads',
+                                        ? 'টাচ: নেট মিটার'
+                                        : 'Tap: Net Meter',
+                                  ),
+                                  _buildTouchOverlay(
+                                    gridTiedAcLoadRect,
+                                    _openAcLoadGuide,
+                                    _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
+                                  ),
+                                  _buildTouchOverlay(
+                                    gridTiedGridRect,
+                                    _openNationalGridGuide,
+                                    _isBangla
+                                        ? 'টাচ: পাওয়ার গ্রিড'
+                                        : 'Tap: Utility Grid',
                                   ),
                                 ],
-                                if (result.hasDcLoad)
-                                  _buildTouchOverlay(
-                                    offGridDcLoadRect,
-                                    _openDcLoadGuide,
-                                    _isBangla
-                                        ? 'টাচ: ডিসি লোড গাইড'
-                                        : 'Tap: DC Loads',
-                                  ),
                               ],
-
-                              // ২. হাইব্রিড টাচ হটস্পটসমূহ
-                              if (isHybrid) ...[
-                                _buildTouchOverlay(
-                                  hybridPvRect,
-                                  _openPvWiringGuide,
-                                  _isBangla
-                                      ? 'টাচ: প্যানেল সংযোগ'
-                                      : 'Tap: PV Wiring',
-                                ),
-                                _buildTouchOverlay(
-                                  hybridBatteryRect,
-                                  _openBatteryWiringGuide,
-                                  _isBangla
-                                      ? 'টাচ: ব্যাটারি সংযোগ'
-                                      : 'Tap: Battery Wiring',
-                                ),
-                                _buildTouchOverlay(
-                                  hybridInvRect,
-                                  _openHybridInverterGuide,
-                                  _isBangla
-                                      ? 'টাচ: হাইব্রিড গাইড'
-                                      : 'Tap: Hybrid Inverter',
-                                ),
-                                _buildTouchOverlay(
-                                  hybridAcLoadRect,
-                                  _openAcLoadGuide,
-                                  _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
-                                ),
-                                _buildTouchOverlay(
-                                  hybridGridRect,
-                                  _openNationalGridGuide,
-                                  _isBangla
-                                      ? 'টাচ: গ্রিড তথ্য'
-                                      : 'Tap: Utility Grid',
-                                ),
-                              ],
-
-                              // ৩. অন-গ্রিড টাচ হটস্পটসমূহ
-                              if (isGridTied) ...[
-                                _buildTouchOverlay(
-                                  gridTiedPvRect,
-                                  _openPvWiringGuide,
-                                  _isBangla
-                                      ? 'টাচ: প্যানেল সংযোগ'
-                                      : 'Tap: PV Wiring',
-                                ),
-                                _buildTouchOverlay(
-                                  gridTiedInvRect,
-                                  _openInverterGuide,
-                                  _isBangla
-                                      ? 'টাচ: অন-গ্রিড ইনভার্টার'
-                                      : 'Tap: Inverter Guide',
-                                ),
-                                _buildTouchOverlay(
-                                  gridTiedMeterRect,
-                                  _openNetMeterGuide,
-                                  _isBangla
-                                      ? 'টাচ: নেট মিটার'
-                                      : 'Tap: Net Meter',
-                                ),
-                                _buildTouchOverlay(
-                                  gridTiedAcLoadRect,
-                                  _openAcLoadGuide,
-                                  _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
-                                ),
-                                _buildTouchOverlay(
-                                  gridTiedGridRect,
-                                  _openNationalGridGuide,
-                                  _isBangla
-                                      ? 'টাচ: পাওয়ার গ্রিড'
-                                      : 'Tap: Utility Grid',
-                                ),
-                              ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -837,13 +983,13 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: Align(
             alignment: Alignment.bottomRight,
             child: Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.black.withAlpha(180),
                 borderRadius: BorderRadius.circular(8),
@@ -855,15 +1001,12 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                   const Icon(
                     Icons.touch_app_rounded,
                     color: Colors.cyanAccent,
-                    size: 12,
+                    size: 11,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     hint,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 9.5,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 9),
                   ),
                 ],
               ),
