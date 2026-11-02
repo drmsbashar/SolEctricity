@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/solar_calculation_result.dart';
 import '../../models/system_sizing_params.dart';
 
-// ১. মূল ক্যানভাস ওয়্যারিং পেইন্টার
+// ১. মূল ক্যানভাস ওয়্যারিং পেইন্টার (অ্যাডাপ্টিভ আর্কিটেকচার)
 class SolarRealisticWiringPainter extends CustomPainter {
   final SolarCalculationResult result;
   final SystemSizingParams params;
@@ -33,8 +33,48 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..color = const Color(0xFF38BDF8)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke;
+    final pGridLive = Paint()
+      ..color = const Color(0xFF10B981)
+      ..strokeWidth = 3.5
+      ..style = PaintingStyle.stroke;
 
-    // কম্পোনেন্ট বক্সগুলোর স্থানাঙ্ক
+    switch (params.systemType) {
+      case SolarSystemType.gridTied:
+        _paintGridTiedDiagram(
+          canvas,
+          pDcPos,
+          pDcNeg,
+          pAcPhase,
+          pAcNeutral,
+          pGridLive,
+        );
+        break;
+      case SolarSystemType.hybrid:
+        _paintHybridDiagram(
+          canvas,
+          pDcPos,
+          pDcNeg,
+          pAcPhase,
+          pAcNeutral,
+          pGridLive,
+        );
+        break;
+      case SolarSystemType.offGrid:
+        _paintOffGridDiagram(canvas, pDcPos, pDcNeg, pAcPhase, pAcNeutral);
+        break;
+    }
+  }
+
+  // =========================================================================
+  // ⚡ ১. অফ-গ্রিড সিস্টেম ওয়্যারিং (Off-Grid)
+  // =========================================================================
+  void _paintOffGridDiagram(
+    Canvas canvas,
+    Paint pDcPos,
+    Paint pDcNeg,
+    Paint pAcPhase,
+    Paint pAcNeutral,
+  ) {
     const pvRect = Rect.fromLTWH(30, 60, 220, 180);
     const controllerRect = Rect.fromLTWH(360, 70, 220, 160);
     const batteryRect = Rect.fromLTWH(360, 390, 220, 160);
@@ -42,10 +82,8 @@ class SolarRealisticWiringPainter extends CustomPainter {
     const dcLoadRect = Rect.fromLTWH(690, 70, 190, 140);
     const acLoadRect = Rect.fromLTWH(960, 390, 180, 160);
 
-    // ১. পিভি টু চার্জ কন্ট্রোলার ওয়্যারিং (মিডল অ্যালাইনমেন্ট সহ)
+    // ওয়্যারিং রুট
     _drawPvWires(canvas, pvRect, controllerRect, pDcPos, pDcNeg);
-
-    // ২. কন্ট্রোলার টু ব্যাটারি ওয়্যারিং
     _drawControllerToBatteryWires(
       canvas,
       controllerRect,
@@ -54,7 +92,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       pDcNeg,
     );
 
-    // ৩. ব্যাটারি টু ইনভার্টার ও ইনভার্টার টু এসি লোড ওয়্যারিং
     if (result.hasAcLoad) {
       _drawBatteryToInverterWires(
         canvas,
@@ -71,25 +108,228 @@ class SolarRealisticWiringPainter extends CustomPainter {
         pAcNeutral,
       );
       _drawRealisticAcLoad(canvas, acLoadRect);
+      _drawRealisticInverter(
+        canvas,
+        inverterRect,
+        title: isBangla ? 'অফ-গ্রিড ইনভার্টার' : 'Off-grid Inverter',
+      );
     }
 
-    // ৪. কন্ট্রোলার টু ডিসি লোড ওয়্যারিং
     if (result.hasDcLoad) {
       _drawDcLoadWires(canvas, controllerRect, dcLoadRect, pDcPos, pDcNeg);
       _drawRealisticDcLoad(canvas, dcLoadRect);
     }
 
-    // ৫. কম্পোনেন্ট বক্সসমূহ আঁকা
+    // বক্স রেন্ডারিং
     _drawCleanPvArray(canvas, pvRect);
     _drawCleanController(canvas, controllerRect);
     _drawRealisticBatteryBank(canvas, batteryRect);
-
-    if (result.hasAcLoad) {
-      _drawRealisticInverter(canvas, inverterRect);
-    }
   }
 
-  // 👉 সোলার পিভি থেকে চার্জ কন্ট্রোলারের মধ্যবর্তী টেক্সট সেন্টার অ্যালাইনমেন্ট
+  // =========================================================================
+  // 🔄 ২. হাইব্রিড সিস্টেম ওয়্যারিং (Hybrid Architecture)
+  // =========================================================================
+  void _paintHybridDiagram(
+    Canvas canvas,
+    Paint pDcPos,
+    Paint pDcNeg,
+    Paint pAcPhase,
+    Paint pAcNeutral,
+    Paint pGridLive,
+  ) {
+    const pvRect = Rect.fromLTWH(30, 70, 220, 180);
+    const hybridInvRect = Rect.fromLTWH(
+      380,
+      150,
+      260,
+      260,
+    ); // অল-ইন-ওয়ান হাইব্রিড ইনভার্টার
+    const batteryRect = Rect.fromLTWH(30, 360, 220, 160); // পিভির নিচে ব্যাটারি
+    const acLoadRect = Rect.fromLTWH(780, 80, 200, 150); // হোম এসি লোড
+    const gridRect = Rect.fromLTWH(780, 330, 200, 150); // জাতীয় গ্রিড
+
+    // ১. পিভি টু হাইব্রিড ইনভার্টার লাইন
+    final pvPos = Path()
+      ..moveTo(pvRect.right, pvRect.top + 50)
+      ..lineTo(hybridInvRect.left, hybridInvRect.top + 45);
+    final pvNeg = Path()
+      ..moveTo(pvRect.right, pvRect.top + 80)
+      ..lineTo(hybridInvRect.left, hybridInvRect.top + 75);
+    canvas.drawPath(pvPos, pDcPos);
+    canvas.drawPath(pvNeg, pDcNeg);
+    final double midPvX = (pvRect.right + hybridInvRect.left) / 2;
+    _drawBreakerBadge(
+      canvas,
+      Offset(midPvX, pvRect.top + 30),
+      'DC MCB ≥ ${result.pvBreakerAmp.toInt()}A',
+    );
+    _drawLabel(
+      canvas,
+      Offset(midPvX, pvRect.top + 98),
+      '${result.pvCableSizeMm} Cu',
+    );
+
+    // ২. ব্যাটারি টু হাইব্রিড ইনভার্টার লাইন
+    final batPos = Path()
+      ..moveTo(batteryRect.right, batteryRect.top + 50)
+      ..lineTo(hybridInvRect.left, hybridInvRect.top + 160);
+    final batNeg = Path()
+      ..moveTo(batteryRect.right, batteryRect.top + 90)
+      ..lineTo(hybridInvRect.left, hybridInvRect.top + 190);
+    canvas.drawPath(batPos, pDcPos);
+    canvas.drawPath(batNeg, pDcNeg);
+    final double midBatX = (batteryRect.right + hybridInvRect.left) / 2;
+    _drawBreakerBadge(
+      canvas,
+      Offset(midBatX, batteryRect.top + 45),
+      'DC FUSE ≥ ${result.batteryFuseAmp.toInt()}A',
+    );
+    _drawLabel(
+      canvas,
+      Offset(midBatX, batteryRect.top + 108),
+      '${result.batteryCableSizeMm} Cable',
+    );
+
+    // ৩. হাইব্রিড ইনভার্টার টু এসি লোড
+    final acP = Path()
+      ..moveTo(hybridInvRect.right, hybridInvRect.top + 50)
+      ..lineTo(acLoadRect.left, acLoadRect.top + 50);
+    final acN = Path()
+      ..moveTo(hybridInvRect.right, hybridInvRect.top + 80)
+      ..lineTo(acLoadRect.left, acLoadRect.top + 80);
+    canvas.drawPath(acP, pAcPhase);
+    canvas.drawPath(acN, pAcNeutral);
+    final double midAcX = (hybridInvRect.right + acLoadRect.left) / 2;
+    _drawBreakerBadge(
+      canvas,
+      Offset(midAcX, acLoadRect.top + 30),
+      'AC MCB ≥ ${result.acBreakerAmp.toInt()}A',
+    );
+
+    // ৪. হাইব্রিড ইনভার্টার টু ন্যাশনাল গ্রিড (দ্বিমুখী ব্যাকআপ লাইন)
+    final gridPath = Path()
+      ..moveTo(hybridInvRect.right, hybridInvRect.top + 180)
+      ..lineTo(gridRect.left, gridRect.top + 60);
+    canvas.drawPath(gridPath, pGridLive);
+    final double midGridX = (hybridInvRect.right + gridRect.left) / 2;
+    _drawBreakerBadge(
+      canvas,
+      Offset(midGridX, gridRect.top + 30),
+      isBangla ? 'গ্রিড সংযোগ' : 'Grid Connection',
+    );
+
+    // কম্পোনেন্ট বক্সসমূহ আঁকা
+    _drawCleanPvArray(canvas, pvRect);
+    _drawRealisticBatteryBank(canvas, batteryRect);
+    _drawHybridInverterBox(canvas, hybridInvRect);
+    _drawRealisticAcLoad(canvas, acLoadRect);
+    _drawNationalGridBox(canvas, gridRect);
+  }
+
+  // =========================================================================
+  // 🌐 ৩. গ্রিড-টাই / অন-গ্রিড ওয়্যারিং (Grid-Tied Net Metering)
+  // =========================================================================
+  void _paintGridTiedDiagram(
+    Canvas canvas,
+    Paint pDcPos,
+    Paint pDcNeg,
+    Paint pAcPhase,
+    Paint pAcNeutral,
+    Paint pGridLive,
+  ) {
+    const pvRect = Rect.fromLTWH(30, 180, 220, 180);
+    const stringInvRect = Rect.fromLTWH(
+      340,
+      180,
+      220,
+      180,
+    ); // অন-গ্রিড স্ট্রিং ইনভার্টার
+    const netMeterRect = Rect.fromLTWH(
+      640,
+      190,
+      190,
+      160,
+    ); // দ্বিমুখী নেট মিটার
+    const acLoadRect = Rect.fromLTWH(920, 70, 190, 150); // হোম এসি লোড
+    const gridRect = Rect.fromLTWH(920, 310, 190, 150); // জাতীয় পাওয়ার গ্রিড
+
+    // ১. পিভি টু স্ট্রিং ইনভার্টার
+    final pvPos = Path()
+      ..moveTo(pvRect.right, pvRect.top + 50)
+      ..lineTo(stringInvRect.left, stringInvRect.top + 50);
+    final pvNeg = Path()
+      ..moveTo(pvRect.right, pvRect.top + 80)
+      ..lineTo(stringInvRect.left, stringInvRect.top + 80);
+    canvas.drawPath(pvPos, pDcPos);
+    canvas.drawPath(pvNeg, pDcNeg);
+    final double midPvX = (pvRect.right + stringInvRect.left) / 2;
+    _drawBreakerBadge(
+      canvas,
+      Offset(midPvX, pvRect.top + 30),
+      'DC MCB ≥ ${result.pvBreakerAmp.toInt()}A',
+    );
+    _drawLabel(
+      canvas,
+      Offset(midPvX, pvRect.top + 98),
+      '${result.pvCableSizeMm} Cu',
+    );
+
+    // ২. স্ট্রিং ইনভার্টার টু নেট মিটার (এসি আউটপুট)
+    final invAcP = Path()
+      ..moveTo(stringInvRect.right, stringInvRect.top + 50)
+      ..lineTo(netMeterRect.left, netMeterRect.top + 50);
+    final invAcN = Path()
+      ..moveTo(stringInvRect.right, stringInvRect.top + 80)
+      ..lineTo(netMeterRect.left, netMeterRect.top + 80);
+    canvas.drawPath(invAcP, pAcPhase);
+    canvas.drawPath(invAcN, pAcNeutral);
+    final double midInvX = (stringInvRect.right + netMeterRect.left) / 2;
+    _drawBreakerBadge(
+      canvas,
+      Offset(midInvX, netMeterRect.top + 30),
+      'AC MCB ≥ ${result.acBreakerAmp.toInt()}A',
+    );
+
+    // ৩. নেট মিটার টু হোম এসি লোড
+    final meterToLoad = Path()
+      ..moveTo(netMeterRect.right, netMeterRect.top + 45)
+      ..lineTo(netMeterRect.right + 35, netMeterRect.top + 45)
+      ..lineTo(netMeterRect.right + 35, acLoadRect.top + 70)
+      ..lineTo(acLoadRect.left, acLoadRect.top + 70);
+    canvas.drawPath(meterToLoad, pAcPhase);
+
+    // ৪. নেট মিটার টু ন্যাশনাল গ্রিড (দ্বিমুখী নেট মিটারিং লাইন)
+    final meterToGrid = Path()
+      ..moveTo(netMeterRect.right, netMeterRect.top + 105)
+      ..lineTo(netMeterRect.right + 35, netMeterRect.top + 105)
+      ..lineTo(netMeterRect.right + 35, gridRect.top + 70)
+      ..lineTo(gridRect.left, gridRect.top + 70);
+    canvas.drawPath(meterToGrid, pGridLive);
+    _drawLabel(
+      canvas,
+      Offset(
+        netMeterRect.right + 40,
+        (netMeterRect.top + 105 + gridRect.top + 70) / 2,
+      ),
+      isBangla ? 'দ্বিমুখী প্রবাহ' : 'Bi-directional',
+    );
+
+    // বক্সসমূহ আঁকা
+    _drawCleanPvArray(canvas, pvRect);
+    _drawRealisticInverter(
+      canvas,
+      stringInvRect,
+      title: isBangla ? 'অন-গ্রিড ইনভার্টার' : 'Grid-Tied Inverter',
+    );
+    _drawNetMeterBox(canvas, netMeterRect);
+    _drawRealisticAcLoad(canvas, acLoadRect);
+    _drawNationalGridBox(canvas, gridRect);
+  }
+
+  // =========================================================================
+  // 📦 কম্পোনেন্ট বক্সসমূহ আঁকার পদ্ধতি
+  // =========================================================================
+
   void _drawPvWires(Canvas canvas, Rect pv, Rect scc, Paint pPos, Paint pNeg) {
     final pathPos = Path()
       ..moveTo(pv.right, pv.top + 50)
@@ -99,11 +339,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..lineTo(scc.left, scc.top + 75);
     canvas.drawPath(pathPos, pPos);
     canvas.drawPath(pathNeg, pNeg);
-
-    // দুটি বক্সের ঠিক মাঝখানের X স্থানাঙ্ক (Mid-point X)
     final double midX = (pv.right + scc.left) / 2;
-
-    // ব্রেকার ব্যাজ ও ক্যাবল টেক্সট ঠিক মাঝখানে (Center-Aligned)
     _drawBreakerBadge(
       canvas,
       Offset(midX, pv.top + 30),
@@ -127,7 +363,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..lineTo(scc.left + 95, bat.top);
     canvas.drawPath(pathPos, pPos);
     canvas.drawPath(pathNeg, pNeg);
-
     final double midY = (scc.bottom + bat.top) / 2;
     _drawBreakerBadge(
       canvas,
@@ -151,7 +386,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..lineTo(inv.left, inv.top + 90);
     canvas.drawPath(pathPos, pPos);
     canvas.drawPath(pathNeg, pNeg);
-
     final double midX = (bat.right + inv.left) / 2;
     _drawBreakerBadge(
       canvas,
@@ -180,7 +414,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..lineTo(acLoad.left, acLoad.top + 80);
     canvas.drawPath(pathPhase, pPhase);
     canvas.drawPath(pathNeutral, pNeutral);
-
     final double midX = (inv.right + acLoad.left) / 2;
     _drawBreakerBadge(
       canvas,
@@ -213,7 +446,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       const Color(0xFF0369A1),
       isBangla ? 'সোলার পিভি অ্যারে' : 'Solar PV Array',
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 45),
@@ -224,7 +456,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 72),
@@ -235,21 +466,18 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 96),
       'বিন্যাস: ${result.panelsSeries} Series × ${result.panelsParallel} Parallel',
       const TextStyle(color: Colors.white70, fontSize: 11),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 118),
       'Vmp: ${result.arrayVmp.toStringAsFixed(1)}V | Imp: ${result.arrayImp.toStringAsFixed(1)}A',
       const TextStyle(color: Colors.white70, fontSize: 10.5),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 138),
@@ -265,7 +493,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       const Color(0xFF15803D),
       isBangla ? 'চার্জ কন্ট্রোলার' : 'Charge Controller',
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 45),
@@ -276,7 +503,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 74),
@@ -287,7 +513,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 98),
@@ -298,7 +523,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.w600,
       ),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 122),
@@ -316,7 +540,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       const Color(0xFFB45309),
       isBangla ? 'ব্যাটারি ব্যাংক' : 'Battery Bank',
     );
-
     canvas.drawCircle(
       Offset(rect.left + 40, rect.top + 45),
       7,
@@ -327,7 +550,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       7,
       Paint()..color = const Color(0xFF38BDF8),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 36, rect.top + 40),
@@ -348,7 +570,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 75),
@@ -373,14 +594,12 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
   }
 
-  void _drawRealisticInverter(Canvas canvas, Rect rect) {
-    _drawDeviceBase(
-      canvas,
-      rect,
-      const Color(0xFF6D28D9),
-      isBangla ? 'অফ-গ্রিড ইনভার্টার' : 'Off-grid Inverter',
-    );
-
+  void _drawRealisticInverter(
+    Canvas canvas,
+    Rect rect, {
+    required String title,
+  }) {
+    _drawDeviceBase(canvas, rect, const Color(0xFF6D28D9), title);
     final grillPaint = Paint()
       ..color = Colors.white12
       ..strokeWidth = 2.0;
@@ -391,11 +610,12 @@ class SolarRealisticWiringPainter extends CustomPainter {
         grillPaint,
       );
     }
-
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 85),
-      'Pure Sine Wave',
+      params.systemType == SolarSystemType.gridTied
+          ? 'Grid-Synchronized'
+          : 'Pure Sine Wave',
       const TextStyle(
         color: Colors.purpleAccent,
         fontSize: 11,
@@ -405,7 +625,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 104),
-      'Capacity: ≥ ${result.inverterCapacityVa.toInt()} VA',
+      'Capacity: ≥ ${params.systemType == SolarSystemType.gridTied ? (result.inverterCapacityVa / 1000).toStringAsFixed(1) : result.inverterCapacityVa.toInt()} ${params.systemType == SolarSystemType.gridTied ? "kW" : "VA"}',
       const TextStyle(
         color: Colors.white,
         fontSize: 12,
@@ -415,8 +635,138 @@ class SolarRealisticWiringPainter extends CustomPainter {
     _drawText(
       canvas,
       Offset(rect.left + 16, rect.top + 124),
-      'DC ${result.inverterVoltage.toInt()}V ➔ AC 220V 50Hz',
+      params.systemType == SolarSystemType.gridTied
+          ? 'PV DC ➔ 220V 50Hz AC'
+          : 'DC ${result.inverterVoltage.toInt()}V ➔ AC 220V 50Hz',
       const TextStyle(color: Colors.white70, fontSize: 10),
+    );
+  }
+
+  // 🔄 হাইব্রিড অল-ইন-ওয়ান ইনভার্টার বক্স
+  void _drawHybridInverterBox(Canvas canvas, Rect rect) {
+    _drawDeviceBase(
+      canvas,
+      rect,
+      const Color(0xFF8B5CF6),
+      isBangla ? 'সোলার হাইব্রিড ইনভার্টার' : 'Solar Hybrid Inverter',
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 16, rect.top + 42),
+      'All-in-One Smart Inverter',
+      const TextStyle(
+        color: Colors.purpleAccent,
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 16, rect.top + 68),
+      '• বিল্ট-ইন MPPT কন্ট্রোলার (≥ ${result.controllerAmpere.toInt()}A)',
+      const TextStyle(
+        color: Colors.greenAccent,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 16, rect.top + 92),
+      '• ইনভার্টার ক্ষমতা: ≥ ${result.inverterCapacityVa.toInt()} VA',
+      const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 16, rect.top + 116),
+      '• ব্যাটারি বাস: ${params.systemVoltage.toInt()}V DC',
+      const TextStyle(color: Colors.amberAccent, fontSize: 11),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 16, rect.top + 140),
+      '• আউটপুট: 220V 50Hz Pure Sine Wave',
+      const TextStyle(color: Colors.white70, fontSize: 10.5),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 16, rect.top + 164),
+      '• দ্বিমুখী গ্রিড ও জেনারেটর সাপোর্ট',
+      const TextStyle(color: Colors.white60, fontSize: 10),
+    );
+  }
+
+  // 🌐 নেট মিটার বক্স
+  void _drawNetMeterBox(Canvas canvas, Rect rect) {
+    _drawDeviceBase(
+      canvas,
+      rect,
+      const Color(0xFF0D9488),
+      isBangla ? 'দ্বিমুখী নেট মিটার' : 'Bi-directional Net Meter',
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 14, rect.top + 46),
+      isBangla ? 'আমদানি/রপ্তানি রেকর্ডার' : 'Import / Export Meter',
+      const TextStyle(
+        color: Colors.tealAccent,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 14, rect.top + 74),
+      '220V / 230V 50Hz',
+      const TextStyle(
+        color: Colors.white,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 14, rect.top + 98),
+      isBangla
+          ? 'অতিরিক্ত বিদ্যুৎ গ্রিডে পাঠায়'
+          : 'Exports excess solar to grid',
+      const TextStyle(color: Colors.white70, fontSize: 9.5),
+    );
+  }
+
+  // 🏢 জাতীয় পাওয়ার গ্রিড বক্স
+  void _drawNationalGridBox(Canvas canvas, Rect rect) {
+    _drawDeviceBase(
+      canvas,
+      rect,
+      const Color(0xFF10B981),
+      isBangla ? 'জাতীয় পাওয়ার গ্রিড' : 'National Grid',
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 14, rect.top + 48),
+      'Utility Grid (220V AC)',
+      const TextStyle(
+        color: Colors.greenAccent,
+        fontSize: 11.5,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 14, rect.top + 74),
+      isBangla ? 'বিদ্যুৎ ক্রয় ও বিক্রয় লাইন' : 'Net-metering connection line',
+      const TextStyle(color: Colors.white70, fontSize: 10),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 14, rect.top + 98),
+      isBangla ? 'সার্বক্ষণিক নিরবচ্ছিন্ন উৎস' : 'Continuous Utility Source',
+      const TextStyle(color: Colors.white60, fontSize: 9.5),
     );
   }
 
@@ -502,13 +852,11 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
   }
 
-  // 👉 ব্রেকার ব্যাজ ও টেক্সট ঠিক কেন্দ্রবিন্দুতে বসানোর মেথড
   void _drawBreakerBadge(Canvas canvas, Offset center, String text) {
     const width = 118.0;
     const height = 24.0;
     final rect = Rect.fromCenter(center: center, width: width, height: height);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(6));
-
     canvas.drawRRect(rrect, Paint()..color = const Color(0xFFDC2626));
     canvas.drawRRect(
       rrect,
@@ -517,8 +865,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
         ..strokeWidth = 1.0
         ..style = PaintingStyle.stroke,
     );
-
-    // টেক্সট মেপে ঠিক সেন্টারে ড্র করা
     final textSpan = TextSpan(
       text: text,
       style: const TextStyle(
@@ -535,7 +881,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
   }
 
-  // 👉 লেবেল টেক্সট ঠিক সেন্টারে বসানোর মেথড
   void _drawLabel(Canvas canvas, Offset center, String text) {
     final textSpan = TextSpan(
       text: text,
@@ -583,18 +928,15 @@ class CleanPanelVisualPainter extends CustomPainter {
       ..color = const Color(0xFFEF4444)
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
-
     final pNeg = Paint()
       ..color = const Color(0xFF38BDF8)
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
-
     final pJumper = Paint()
       ..color = Colors.amberAccent
       ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
 
-    // ১. একক প্যানেল
     if (pvs == 1 && pvp == 1) {
       final pRect = Rect.fromCenter(
         center: Offset(size.width / 2, size.height / 2 - 20),
@@ -602,8 +944,6 @@ class CleanPanelVisualPainter extends CustomPainter {
         height: 160,
       );
       _drawPanel(canvas, pRect, 'PV-1');
-
-      // পজিটিভ সোজা বাম দিক দিয়ে নিচে নামবে
       canvas.drawLine(
         Offset(pRect.left + 25, pRect.bottom),
         Offset(pRect.left + 25, pRect.bottom + 65),
@@ -619,8 +959,6 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
-      // নেগেটিভ সোজা ডান দিক দিয়ে নিচে নামবে
       canvas.drawLine(
         Offset(pRect.right - 25, pRect.bottom),
         Offset(pRect.right - 25, pRect.bottom + 65),
@@ -636,31 +974,23 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-    }
-    // ২. শুধু সিরিজ সংযোগ (১টি সারি: প্যানেল ১ ও ২)
-    else if (pvs > 1 && pvp == 1) {
+    } else if (pvs > 1 && pvp == 1) {
       final p1 = Rect.fromLTWH(size.width * 0.12, size.height * 0.18, 120, 150);
       final p2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.18, 120, 150);
-
       _drawPanel(canvas, p1, 'Panel 1');
       _drawPanel(canvas, p2, 'Panel 2');
-
-      // মাঝখানের পরিষ্কার সিরিজ জাম্পার: Panel 1 (-) থেকে Panel 2 (+)
       final jumperPath = Path()
         ..moveTo(p1.right - 25, p1.bottom)
         ..lineTo(p1.right - 25, p1.bottom + 30)
         ..lineTo(p2.left + 25, p1.bottom + 30)
         ..lineTo(p2.left + 25, p2.bottom);
       canvas.drawPath(jumperPath, pJumper);
-
       _drawText(
         canvas,
         Offset((p1.right + p2.left) / 2 - 40, p1.bottom + 12),
         isBangla ? 'সিরিজ জাম্পার (+/-)' : 'Series Wire',
         const TextStyle(color: Colors.amberAccent, fontSize: 10),
       );
-
-      // Panel 1 (+) সোজা বাম দিক দিয়ে নিচে নামবে
       canvas.drawLine(
         Offset(p1.left + 25, p1.bottom),
         Offset(p1.left + 25, p1.bottom + 75),
@@ -676,8 +1006,6 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
-      // Panel 2 (-) সোজা ডান দিক দিয়ে নিচে নামবে
       canvas.drawLine(
         Offset(p2.right - 25, p2.bottom),
         Offset(p2.right - 25, p2.bottom + 75),
@@ -693,16 +1021,11 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-    }
-    // ৩. শুধু প্যারালাল সংযোগ (১টি সিরিজ কিন্তু ২টি সমান্তরাল স্ট্রিং)
-    else if (pvs == 1 && pvp > 1) {
+    } else if (pvs == 1 && pvp > 1) {
       final p1 = Rect.fromLTWH(size.width * 0.12, size.height * 0.15, 120, 150);
       final p2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.15, 120, 150);
-
       _drawPanel(canvas, p1, 'String 1');
       _drawPanel(canvas, p2, 'String 2');
-
-      // পজিটিভ বাস (বাম দিয়ে নিচে নেমে সোজা সংযুক্ত)
       final posBus = Path()
         ..moveTo(p1.left + 25, p1.bottom)
         ..lineTo(p1.left + 25, p1.bottom + 30)
@@ -724,8 +1047,6 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
-      // নেগেটিভ বাস (ডান দিয়ে নিচে নেমে সংযুক্ত)
       final negBus = Path()
         ..moveTo(p1.right - 25, p1.bottom)
         ..lineTo(p1.right - 25, p1.bottom + 55)
@@ -747,51 +1068,34 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-    }
-    // ৪. ২ সিরিজ × ২ প্যারালাল (৪টি প্যানেল - সম্পূর্ণ জটহীন ও ওভারল্যাপমুক্ত)
-    else {
-      // সারি ১ (উপরের দুটি প্যানেল)
+    } else {
       final p11 = Rect.fromLTWH(size.width * 0.18, 20, 105, 120);
       final p12 = Rect.fromLTWH(size.width * 0.54, 20, 105, 120);
-
-      // সারি ২ (নিচের দুটি প্যানেল)
       final p21 = Rect.fromLTWH(size.width * 0.18, 180, 105, 120);
       final p22 = Rect.fromLTWH(size.width * 0.54, 180, 105, 120);
-
       _drawPanel(canvas, p11, 'S1 - Panel 1');
       _drawPanel(canvas, p12, 'S1 - Panel 2');
       _drawPanel(canvas, p21, 'S2 - Panel 1');
       _drawPanel(canvas, p22, 'S2 - Panel 2');
-
-      // --- সিরিজ কানেকশন (মাঝখান দিয়ে হলুদ জাম্পার) ---
-      // সারি ১ এর জাম্পার: P11 (-) থেকে P12 (+)
       final j1 = Path()
         ..moveTo(p11.right - 20, p11.bottom)
         ..lineTo(p11.right - 20, p11.bottom + 18)
         ..lineTo(p12.left + 20, p11.bottom + 18)
         ..lineTo(p12.left + 20, p12.bottom);
       canvas.drawPath(j1, pJumper);
-
-      // সারি ২ এর জাম্পার: P21 (-) থেকে P22 (+)
       final j2 = Path()
         ..moveTo(p21.right - 20, p21.bottom)
         ..lineTo(p21.right - 20, p21.bottom + 18)
         ..lineTo(p22.left + 20, p21.bottom + 18)
         ..lineTo(p22.left + 20, p22.bottom);
       canvas.drawPath(j2, pJumper);
-
-      // --- প্যারালাল কানেকশন (দুই পাশ দিয়ে আলাদা রুট, মাঝের কোনো তারকে ছোঁবে না) ---
-
-      // ১. পজিটিভ প্যারালাল লাইন (বাম দিক দিয়ে সম্পূর্ণ উন্মুক্ত রুট)
       final posPath = Path()
         ..moveTo(p11.left + 20, p11.bottom)
-        ..lineTo(p11.left - 25, p11.bottom) // বামে বাইরে বের হলো
-        ..lineTo(p11.left - 25, p21.bottom + 35) // নিচে নেমে এলো
-        ..lineTo(p21.left + 20, p21.bottom + 35) // P21 এর তারের সাথে জোড়া
+        ..lineTo(p11.left - 25, p11.bottom)
+        ..lineTo(p11.left - 25, p21.bottom + 35)
+        ..lineTo(p21.left + 20, p21.bottom + 35)
         ..lineTo(p21.left + 20, p21.bottom);
       canvas.drawPath(posPath, pPos);
-
-      // মূল পজিটিভ আউটপুট তার (নিচে ড্রপ)
       canvas.drawLine(
         Offset(p11.left - 25, p21.bottom + 35),
         Offset(p11.left - 25, p21.bottom + 75),
@@ -807,17 +1111,13 @@ class CleanPanelVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
-      // ২. নেগেটিভ প্যারালাল লাইন (ডান দিক দিয়ে সম্পূর্ণ উন্মুক্ত রুট)
       final negPath = Path()
         ..moveTo(p12.right - 20, p12.bottom)
-        ..lineTo(p12.right + 25, p12.bottom) // ডানে বাইরে বের হলো
-        ..lineTo(p12.right + 25, p22.bottom + 35) // নিচে নেমে এলো
-        ..lineTo(p22.right - 20, p22.bottom + 35) // P22 এর তারের সাথে জোড়া
+        ..lineTo(p12.right + 25, p12.bottom)
+        ..lineTo(p12.right + 25, p22.bottom + 35)
+        ..lineTo(p22.right - 20, p22.bottom + 35)
         ..lineTo(p22.right - 20, p22.bottom);
       canvas.drawPath(negPath, pNeg);
-
-      // মূল নেগেটিভ আউটপুট তার (নিচে ড্রপ)
       canvas.drawLine(
         Offset(p12.right + 25, p22.bottom + 35),
         Offset(p12.right + 25, p22.bottom + 75),
@@ -847,7 +1147,6 @@ class CleanPanelVisualPainter extends CustomPainter {
         ..color = Colors.white24
         ..style = PaintingStyle.stroke,
     );
-
     final lineP = Paint()
       ..color = Colors.cyanAccent.withAlpha(50)
       ..strokeWidth = 1.0;
@@ -861,7 +1160,6 @@ class CleanPanelVisualPainter extends CustomPainter {
       Offset(r.right, r.top + r.height / 2),
       lineP,
     );
-
     _drawText(
       canvas,
       Offset(r.left + 8, r.top + 8),
@@ -977,7 +1275,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
       final b2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.30, 120, 100);
       _drawBattery(canvas, b1, 'Battery 1');
       _drawBattery(canvas, b2, 'Battery 2');
-
       final jPath = Path()
         ..moveTo(b1.right - 25, b1.top)
         ..lineTo(b1.right - 25, b1.top - 25)
@@ -990,7 +1287,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
         isBangla ? 'সিরিজ জাম্পার' : 'Series Jumper',
         const TextStyle(color: Colors.amberAccent, fontSize: 10),
       );
-
       canvas.drawLine(
         Offset(b1.left + 25, b1.top),
         Offset(b1.left + 25, b1.top - 55),
@@ -1006,7 +1302,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
       canvas.drawLine(
         Offset(b2.right - 25, b2.top),
         Offset(b2.right - 25, b2.top - 55),
@@ -1027,7 +1322,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
       final b2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.30, 120, 100);
       _drawBattery(canvas, b1, 'Bat 1 (12V)');
       _drawBattery(canvas, b2, 'Bat 2 (12V)');
-
       final posPath = Path()
         ..moveTo(b1.left + 25, b1.top)
         ..lineTo(b1.left + 25, b1.top - 25)
@@ -1049,7 +1343,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
       final negPath = Path()
         ..moveTo(b1.right - 25, b1.top)
         ..lineTo(b1.right - 25, b1.top - 48)
@@ -1076,12 +1369,10 @@ class CleanBatteryVisualPainter extends CustomPainter {
       final b12 = Rect.fromLTWH(size.width * 0.44, 40, 105, 85);
       final b21 = Rect.fromLTWH(size.width * 0.08, 190, 105, 85);
       final b22 = Rect.fromLTWH(size.width * 0.44, 190, 105, 85);
-
       _drawBattery(canvas, b11, 'B1');
       _drawBattery(canvas, b12, 'B2');
       _drawBattery(canvas, b21, 'B3');
       _drawBattery(canvas, b22, 'B4');
-
       canvas.drawLine(
         Offset(b11.right - 20, b11.top),
         Offset(b12.left + 20, b12.top),
@@ -1092,7 +1383,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
         Offset(b22.left + 20, b22.top),
         pJumper,
       );
-
       final pathParPos = Path()
         ..moveTo(b11.left + 20, b11.top)
         ..lineTo(size.width * 0.76, b11.top)
@@ -1114,7 +1404,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
         ),
       );
-
       final pathParNeg = Path()
         ..moveTo(b12.right - 20, b12.top)
         ..lineTo(size.width * 0.84, b12.top)
@@ -1150,7 +1439,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
         ..color = Colors.white24
         ..style = PaintingStyle.stroke,
     );
-
     _drawText(
       canvas,
       Offset(r.left + 8, r.bottom - 20),
@@ -1161,7 +1449,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
-
     canvas.drawCircle(
       Offset(r.left + 20, r.top + 10),
       6,
@@ -1172,7 +1459,6 @@ class CleanBatteryVisualPainter extends CustomPainter {
       6,
       Paint()..color = Colors.cyanAccent,
     );
-
     _drawText(
       canvas,
       Offset(r.left + 17, r.top + 5),
@@ -1196,5 +1482,5 @@ class CleanBatteryVisualPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

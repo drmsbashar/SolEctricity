@@ -27,21 +27,30 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
       TransformationController();
   bool _isLandscape = false;
 
-  // এসি লোড বক্স যুক্ত হওয়ায় নতুন প্রশস্ত ক্যানভাস সাইজ
   static const double baseWidth = 1180.0;
   static const double baseHeight = 620.0;
 
-  static const pvRect = Rect.fromLTWH(30, 60, 220, 180);
-  static const controllerRect = Rect.fromLTWH(350, 70, 220, 160);
-  static const batteryRect = Rect.fromLTWH(350, 390, 220, 160);
-  static const inverterRect = Rect.fromLTWH(640, 390, 210, 160);
-  static const dcLoadRect = Rect.fromLTWH(670, 70, 190, 140);
-  static const acLoadRect = Rect.fromLTWH(
-    930,
-    390,
-    180,
-    160,
-  ); // 👈 এসি লোড হটস্পট
+  // অফ-গ্রিড অবস্থানসমূহ
+  static const offGridPvRect = Rect.fromLTWH(30, 60, 220, 180);
+  static const offGridControllerRect = Rect.fromLTWH(360, 70, 220, 160);
+  static const offGridBatteryRect = Rect.fromLTWH(360, 390, 220, 160);
+  static const offGridInverterRect = Rect.fromLTWH(660, 390, 210, 160);
+  static const offGridDcLoadRect = Rect.fromLTWH(690, 70, 190, 140);
+  static const offGridAcLoadRect = Rect.fromLTWH(960, 390, 180, 160);
+
+  // হাইব্রিড অবস্থানসমূহ
+  static const hybridPvRect = Rect.fromLTWH(30, 70, 220, 180);
+  static const hybridBatteryRect = Rect.fromLTWH(30, 360, 220, 160);
+  static const hybridInvRect = Rect.fromLTWH(380, 150, 260, 260);
+  static const hybridAcLoadRect = Rect.fromLTWH(780, 80, 200, 150);
+  static const hybridGridRect = Rect.fromLTWH(780, 330, 200, 150);
+
+  // অন-গ্রিড অবস্থানসমূহ
+  static const gridTiedPvRect = Rect.fromLTWH(30, 180, 220, 180);
+  static const gridTiedInvRect = Rect.fromLTWH(340, 180, 220, 180);
+  static const gridTiedMeterRect = Rect.fromLTWH(640, 190, 190, 160);
+  static const gridTiedAcLoadRect = Rect.fromLTWH(920, 70, 190, 150);
+  static const gridTiedGridRect = Rect.fromLTWH(920, 310, 190, 150);
 
   @override
   void initState() {
@@ -128,7 +137,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     final result = widget.result;
     final int pvs = result.panelsSeries;
     final int pvp = result.panelsParallel;
-
     String modeText;
     if (pvs == 1 && pvp == 1) {
       modeText = _isBangla ? 'একক প্যানেল সংযোগ' : 'Single Panel Setup';
@@ -221,7 +229,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     final result = widget.result;
     final int bs = result.batteriesSeries;
     final int bp = result.batteriesParallel;
-
     String modeText;
     if (bs == 1 && bp == 1) {
       modeText = _isBangla ? 'একক ১২V ব্যাটারি' : 'Single 12V Battery';
@@ -424,9 +431,77 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
       content: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
+          widget.params.systemType == SolarSystemType.gridTied
+              ? (_isBangla
+                    ? '• অন-গ্রিড স্ট্রিং ইনভার্টার সোলার ডিসি ভোল্টেজকে সিনক্রোনাইজ করে ২২০V এসিতে রূপান্তর করে।\n• এর আউটপুট সরাসরি নেট-মিটার হয়ে মূল ডিস্ট্রিবিউশন বোর্ডে যুক্ত হয়।\n• গ্রিড অফ থাকলে নিরাপত্তা স্বার্থে এটি স্বয়ংক্রিয়ভাবে বন্ধ (Anti-Islanding) হয়ে যায়।'
+                    : '• Grid-Tied Inverter synchronizes solar DC power to 220V grid AC.\n• Output directly connects to Net-Meter.\n• Features Anti-Islanding safety protection.')
+              : (_isBangla
+                    ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিটিভ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
+                    : '• Inverter DC input connects directly to the Battery Bank (NEVER into charge controller DC load port!).\n• Install a ≥ ${widget.result.batteryFuseAmp.toInt()}A DC Fuse on the battery positive line.\n• AC 220V output routes to your home AC loads.'),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openHybridInverterGuide() {
+    _showDetailModal(
+      title: _isBangla
+          ? 'হাইব্রিড ইনভার্টার নির্দেশিকা'
+          : 'Hybrid Inverter Guide',
+      headerColor: const Color(0xFF8B5CF6),
+      content: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
           _isBangla
-              ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিটিভ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
-              : '• Inverter DC input connects directly to the Battery Bank (NEVER into charge controller DC load port!).\n• Install a ≥ ${widget.result.batteryFuseAmp.toInt()}A DC Fuse on the battery positive line.\n• AC 220V output routes to your home AC loads.',
+              ? '• এটি একটি অল-ইন-ওয়ান ইনভার্টার যার ভেতরে MPPT চার্জ কন্ট্রোলার বিল্ট-ইন থাকে।\n• সোলার প্যানেল এবং ব্যাটারি ব্যাংক উভয়ই সরাসরি ইনভার্টারের নির্ধারিত টার্মিনালে সংযুক্ত হয়।\n• একই সাথে এটি জাতীয় গ্রিডের সাথে যুক্ত হয়ে স্বয়ংক্রিয়ভাবে ব্যাকআপ পরিচালনা করে।'
+              : '• All-in-One smart unit with integrated MPPT charge controller.\n• Solar array and battery bank connect directly to the inverter.\n• Manages solar, battery and grid inputs simultaneously.',
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openNetMeterGuide() {
+    _showDetailModal(
+      title: _isBangla
+          ? 'দ্বিমুখী নেট মিটার নির্দেশিকা'
+          : 'Bi-directional Net Meter',
+      headerColor: const Color(0xFF0D9488),
+      content: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _isBangla
+              ? '• নেট মিটারিং একটি বিশেষ দ্বিমুখী মিটার যা বিদ্যুৎ আমদানি (Import) এবং রপ্তানি (Export) উভয় হিসাব রাখে।\n• দিনের বেলা উৎপাদিত বাড়তি সোলার বিদ্যুৎ জাতীয় গ্রিডে রপ্তানি হয় এবং মাসের শেষে মোট বিল সমন্বয় করা হয়।'
+              : '• Bi-directional meter records both electricity imported from and exported to the grid.\n• Excess solar electricity is sold back to the utility grid.',
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openNationalGridGuide() {
+    _showDetailModal(
+      title: _isBangla ? 'জাতীয় পাওয়ার গ্রিড সংযোগ' : 'National Utility Grid',
+      headerColor: const Color(0xFF10B981),
+      content: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _isBangla
+              ? '• জাতীয় গ্রিড ২৪ ঘণ্টা প্রধান শক্তি ভাণ্ডার হিসেবে কাজ করে।\n• অন-গ্রিড এবং হাইব্রিড সিস্টেমে সোলারের ঘাটতি সময়ে গ্রিড থেকে স্বয়ংক্রিয়ভাবে শক্তি সরবরাহ বজায় থাকে।'
+              : '• 24/7 main utility grid source providing continuous power supply and absorbing excess solar power.',
           style: const TextStyle(
             color: Colors.white70,
             fontSize: 13,
@@ -465,7 +540,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         padding: const EdgeInsets.all(16),
         child: Text(
           _isBangla
-              ? '• এসি লোডসমূহ (২২০V ফ্রিজ, সাধারণ টিভি, ফ্যান ইত্যাদি) ইনভার্টারের আউটপুট থেকে এসি ব্রেকার (AC MCB) হয়ে চলবে।\n• এটি বিশুদ্ধ সাইন ওয়েভ (Pure Sine Wave) লাইন, তাই সাধারণ বাসাবাড়ির সব যন্ত্রপাতি নিরাপদে চালানো যাবে।'
+              ? '• এসি লোডসমূহ (২২০V ফ্রিজ, সাধারণ টিভি, ফ্যান ইত্যাদি) ইনভার্টারের আউটপুট থেকে এসি ব্রেকার (AC MCB) হয়ে চলবে।\n• বিশুদ্ধ সাইন ওয়েভ লাইন সাধারণ বাসাবাড়ির সব যন্ত্রপাতির জন্য নিরাপদ।'
               : '• AC loads (220V Fridge, TV, AC Fan) run from Inverter AC output breaker.\n• Pure Sine Wave line ensures safe operation of sensitive home appliances.',
           style: const TextStyle(
             color: Colors.white70,
@@ -517,6 +592,8 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
   Widget build(BuildContext context) {
     final result = widget.result;
     final params = widget.params;
+    final isGridTied = params.systemType == SolarSystemType.gridTied;
+    final isHybrid = params.systemType == SolarSystemType.hybrid;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0F1D),
@@ -614,49 +691,127 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                                   isBangla: _isBangla,
                                 ),
                               ),
-                              _buildTouchOverlay(
-                                pvRect,
-                                _openPvWiringGuide,
-                                _isBangla
-                                    ? 'টাচ: প্যানেল সংযোগ'
-                                    : 'Tap: PV Wiring',
-                              ),
-                              _buildTouchOverlay(
-                                controllerRect,
-                                _openControllerGuide,
-                                _isBangla ? 'টাচ: পোর্ট গাইড' : 'Tap: Ports',
-                              ),
-                              _buildTouchOverlay(
-                                batteryRect,
-                                _openBatteryWiringGuide,
-                                _isBangla
-                                    ? 'টাচ: ব্যাটারি সংযোগ'
-                                    : 'Tap: Battery Wiring',
-                              ),
-                              if (result.hasAcLoad) ...[
+
+                              // ১. অফ-গ্রিড টাচ হটস্পটসমূহ
+                              if (!isGridTied && !isHybrid) ...[
                                 _buildTouchOverlay(
-                                  inverterRect,
+                                  offGridPvRect,
+                                  _openPvWiringGuide,
+                                  _isBangla
+                                      ? 'টাচ: প্যানেল সংযোগ'
+                                      : 'Tap: PV Wiring',
+                                ),
+                                _buildTouchOverlay(
+                                  offGridControllerRect,
+                                  _openControllerGuide,
+                                  _isBangla ? 'টাচ: পোর্ট গাইড' : 'Tap: Ports',
+                                ),
+                                _buildTouchOverlay(
+                                  offGridBatteryRect,
+                                  _openBatteryWiringGuide,
+                                  _isBangla
+                                      ? 'টাচ: ব্যাটারি সংযোগ'
+                                      : 'Tap: Battery Wiring',
+                                ),
+                                if (result.hasAcLoad) ...[
+                                  _buildTouchOverlay(
+                                    offGridInverterRect,
+                                    _openInverterGuide,
+                                    _isBangla
+                                        ? 'টাচ: ইনভার্টার গাইড'
+                                        : 'Tap: Inverter Guide',
+                                  ),
+                                  _buildTouchOverlay(
+                                    offGridAcLoadRect,
+                                    _openAcLoadGuide,
+                                    _isBangla
+                                        ? 'টাচ: এসি লোড গাইড'
+                                        : 'Tap: AC Loads',
+                                  ),
+                                ],
+                                if (result.hasDcLoad)
+                                  _buildTouchOverlay(
+                                    offGridDcLoadRect,
+                                    _openDcLoadGuide,
+                                    _isBangla
+                                        ? 'টাচ: ডিসি লোড গাইড'
+                                        : 'Tap: DC Loads',
+                                  ),
+                              ],
+
+                              // ২. হাইব্রিড টাচ হটস্পটসমূহ
+                              if (isHybrid) ...[
+                                _buildTouchOverlay(
+                                  hybridPvRect,
+                                  _openPvWiringGuide,
+                                  _isBangla
+                                      ? 'টাচ: প্যানেল সংযোগ'
+                                      : 'Tap: PV Wiring',
+                                ),
+                                _buildTouchOverlay(
+                                  hybridBatteryRect,
+                                  _openBatteryWiringGuide,
+                                  _isBangla
+                                      ? 'টাচ: ব্যাটারি সংযোগ'
+                                      : 'Tap: Battery Wiring',
+                                ),
+                                _buildTouchOverlay(
+                                  hybridInvRect,
+                                  _openHybridInverterGuide,
+                                  _isBangla
+                                      ? 'টাচ: হাইব্রিড গাইড'
+                                      : 'Tap: Hybrid Inverter',
+                                ),
+                                _buildTouchOverlay(
+                                  hybridAcLoadRect,
+                                  _openAcLoadGuide,
+                                  _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
+                                ),
+                                _buildTouchOverlay(
+                                  hybridGridRect,
+                                  _openNationalGridGuide,
+                                  _isBangla
+                                      ? 'টাচ: গ্রিড তথ্য'
+                                      : 'Tap: Utility Grid',
+                                ),
+                              ],
+
+                              // ৩. অন-গ্রিড টাচ হটস্পটসমূহ
+                              if (isGridTied) ...[
+                                _buildTouchOverlay(
+                                  gridTiedPvRect,
+                                  _openPvWiringGuide,
+                                  _isBangla
+                                      ? 'টাচ: প্যানেল সংযোগ'
+                                      : 'Tap: PV Wiring',
+                                ),
+                                _buildTouchOverlay(
+                                  gridTiedInvRect,
                                   _openInverterGuide,
                                   _isBangla
-                                      ? 'টাচ: ইনভার্টার গাইড'
+                                      ? 'টাচ: অন-গ্রিড ইনভার্টার'
                                       : 'Tap: Inverter Guide',
                                 ),
                                 _buildTouchOverlay(
-                                  acLoadRect,
-                                  _openAcLoadGuide,
+                                  gridTiedMeterRect,
+                                  _openNetMeterGuide,
                                   _isBangla
-                                      ? 'টাচ: এসি লোড গাইড'
-                                      : 'Tap: AC Loads',
+                                      ? 'টাচ: নেট মিটার'
+                                      : 'Tap: Net Meter',
+                                ),
+                                _buildTouchOverlay(
+                                  gridTiedAcLoadRect,
+                                  _openAcLoadGuide,
+                                  _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
+                                ),
+                                _buildTouchOverlay(
+                                  gridTiedGridRect,
+                                  _openNationalGridGuide,
+                                  _isBangla
+                                      ? 'টাচ: পাওয়ার গ্রিড'
+                                      : 'Tap: Utility Grid',
                                 ),
                               ],
-                              if (result.hasDcLoad)
-                                _buildTouchOverlay(
-                                  dcLoadRect,
-                                  _openDcLoadGuide,
-                                  _isBangla
-                                      ? 'টাচ: ডিসি লোড গাইড'
-                                      : 'Tap: DC Loads',
-                                ),
                             ],
                           ),
                         ),
@@ -740,7 +895,8 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             const Color(0xFF38BDF8),
             _isBangla ? 'ডিসি নেগেটিভ (-)' : 'DC Negative (-)',
           ),
-          if (widget.result.hasAcLoad) ...[
+          if (widget.result.hasAcLoad ||
+              widget.params.systemType == SolarSystemType.gridTied) ...[
             _legendItem(
               const Color(0xFFF59E0B),
               _isBangla ? 'এসি ফেজ (220V)' : 'AC Live (L)',
@@ -750,10 +906,11 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               _isBangla ? 'এসি নিউট্রাল (N)' : 'AC Neutral (N)',
             ),
           ],
-          _legendItem(
-            const Color(0xFF10B981),
-            _isBangla ? 'আর্থিং (Earth)' : 'Ground (PE)',
-          ),
+          if (widget.params.systemType != SolarSystemType.offGrid)
+            _legendItem(
+              const Color(0xFF10B981),
+              _isBangla ? 'গ্রিড লাইন' : 'Grid Line',
+            ),
         ],
       ),
     );

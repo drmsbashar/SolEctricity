@@ -46,6 +46,8 @@ class _SystemCalculationSummaryScreenState
   Widget build(BuildContext context) {
     final result = widget.result;
     final params = widget.params;
+    final isGridTied = params.systemType == SolarSystemType.gridTied;
+    final isHybrid = params.systemType == SolarSystemType.hybrid;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F7),
@@ -92,20 +94,22 @@ class _SystemCalculationSummaryScreenState
                   _buildDemandHeaderCard(result, params),
                   const SizedBox(height: 14),
 
-                  // ২. সোলার পিভি অ্যারে কার্ড (প্রোগ্রেসিভ ডিসক্লোজার)
+                  // ২. সোলার পিভি অ্যারে কার্ড
                   _buildPvArrayCard(result, params),
                   const SizedBox(height: 14),
 
-                  // ৩. ব্যাটারি ব্যাংক কার্ড (প্রোগ্রেসিভ ডিসক্লোজার)
-                  _buildBatteryBankCard(result, params),
+                  // ৩. ব্যাটারি ব্যাংক কার্ড (অন-গ্রিড হলে সম্পূর্ণ বাদ)
+                  if (!isGridTied) ...[
+                    _buildBatteryBankCard(result, params),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // ৪. পাওয়ার ইলেকট্রনিক্স কার্ড (আর্কিটেকচার অনুযায়ী অভিযোজিত)
+                  _buildPowerElectronicsCard(result, params),
                   const SizedBox(height: 14),
 
-                  // ৪. পাওয়ার ইলেকট্রনিক্স কার্ড (বিশুদ্ধ সাইন ওয়েভ উল্লেখসহ)
-                  _buildPowerElectronicsCard(result),
-                  const SizedBox(height: 14),
-
-                  // ৫. 🛡️ সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড (নতুন যুক্ত)
-                  _buildProtectionAndCablesCard(result),
+                  // ৫. 🛡️ সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
+                  _buildProtectionAndCablesCard(result, params),
                   const SizedBox(height: 14),
 
                   // ৬. সিস্টেম রিক্যাপ কার্ড
@@ -143,8 +147,7 @@ class _SystemCalculationSummaryScreenState
                     ),
                     elevation: 2,
                   ),
-                  onPressed:
-                      widget.onProceedToDiagram, // 👈 সরাসরি কলব্যাক কল হবে
+                  onPressed: widget.onProceedToDiagram,
                   icon: const Icon(
                     Icons.account_tree_rounded,
                     color: Colors.white,
@@ -170,6 +173,19 @@ class _SystemCalculationSummaryScreenState
     SolarCalculationResult result,
     SystemSizingParams params,
   ) {
+    String archLabel;
+    switch (params.systemType) {
+      case SolarSystemType.gridTied:
+        archLabel = _isBangla ? 'অন-গ্রিড নেট মিটার' : 'On-Grid Net Meter';
+        break;
+      case SolarSystemType.hybrid:
+        archLabel = _isBangla ? 'হাইব্রিড সিস্টেম' : 'Hybrid System';
+        break;
+      case SolarSystemType.offGrid:
+        archLabel = '${params.systemVoltage.toInt()}V DC Bus';
+        break;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -210,7 +226,7 @@ class _SystemCalculationSummaryScreenState
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${params.systemVoltage.toInt()}V DC Bus',
+                  archLabel,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -236,24 +252,27 @@ class _SystemCalculationSummaryScreenState
               const SizedBox(width: 6),
               const Text(
                 'Wh/day',
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const Spacer(),
-              Text(
-                '≈ ${result.energyDemandAh.toStringAsFixed(1)} Ah/day',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              if (params.systemType != SolarSystemType.gridTied)
+                Text(
+                  '≈ ${result.energyDemandAh.toStringAsFixed(1)} Ah/day',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
             ],
           ),
-          if (result.hasAcLoad && result.hasDcLoad) ...[
+          if (result.hasAcLoad &&
+              result.hasDcLoad &&
+              params.systemType != SolarSystemType.gridTied) ...[
             const SizedBox(height: 10),
             const Divider(color: Colors.white24, height: 1),
             const SizedBox(height: 8),
@@ -423,65 +442,21 @@ class _SystemCalculationSummaryScreenState
     );
   }
 
-  Widget _buildPowerElectronicsCard(SolarCalculationResult result) {
+  Widget _buildPowerElectronicsCard(
+    SolarCalculationResult result,
+    SystemSizingParams params,
+  ) {
+    final isGridTied = params.systemType == SolarSystemType.gridTied;
+    final isHybrid = params.systemType == SolarSystemType.hybrid;
+
     return _buildSectionCard(
       title: _isBangla
           ? 'পাওয়ার ইলেকট্রনিক্স রেটিং'
           : 'Power Electronics Specs',
       icon: Icons.settings_input_component_rounded,
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1B6A3B).withAlpha(20),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.tune_rounded,
-                  color: Color(0xFF1B6A3B),
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isBangla
-                          ? 'সোলার চার্জ কন্ট্রোলার'
-                          : 'Solar Charge Controller',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      '${result.controllerVoltage.toInt()}V, ≥ ${result.controllerAmpere.toInt()}A (${result.controllerType.toUpperCase()})',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (result.hasAcLoad) ...[
-          const SizedBox(height: 10),
+        // ১. কন্ট্রোলার (শুধু অফ-গ্রিডে আলাদা দেখাবে)
+        if (!isGridTied && !isHybrid) ...[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -498,7 +473,7 @@ class _SystemCalculationSummaryScreenState
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
-                    Icons.sync_alt_rounded,
+                    Icons.tune_rounded,
                     color: Color(0xFF1B6A3B),
                     size: 24,
                   ),
@@ -508,42 +483,18 @@ class _SystemCalculationSummaryScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _isBangla
-                                ? 'অফ-গ্রিড ইনভার্টার ক্যাপাসিটি'
-                                : 'Off-grid Inverter Capacity',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1B6A3B).withAlpha(25),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              'Pure Sine Wave',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1B6A3B),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
                       Text(
-                        '${result.inverterVoltage.toInt()}V DC to 220V AC, ≥ ${result.inverterCapacityVa.toInt()} VA',
+                        _isBangla
+                            ? 'সোলার চার্জ কন্ট্রোলার'
+                            : 'Solar Charge Controller',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '${result.controllerVoltage.toInt()}V, ≥ ${result.controllerAmpere.toInt()}A (${result.controllerType.toUpperCase()})',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -556,27 +507,124 @@ class _SystemCalculationSummaryScreenState
               ],
             ),
           ),
+          const SizedBox(height: 10),
         ],
+
+        // ২. ইনভার্টার ব্লক (সিস্টেমের ধরন অনুযায়ী অ্যাডাপ্টিভ)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B6A3B).withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isGridTied
+                      ? Icons.solar_power_rounded
+                      : (isHybrid
+                            ? Icons.sync_alt_rounded
+                            : Icons.power_rounded),
+                  color: const Color(0xFF1B6A3B),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isGridTied
+                              ? (_isBangla
+                                    ? 'অন-গ্রিড স্ট্রিং ইনভার্টার'
+                                    : 'Grid-Tied String Inverter')
+                              : (isHybrid
+                                    ? (_isBangla
+                                          ? 'সোলার হাইব্রিড ইনভার্টার'
+                                          : 'Solar Hybrid Inverter')
+                                    : (_isBangla
+                                          ? 'অফ-গ্রিড ইনভার্টার'
+                                          : 'Off-Grid Inverter')),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B6A3B).withAlpha(25),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isGridTied
+                                ? 'Net Metering'
+                                : (isHybrid
+                                      ? 'Built-in MPPT'
+                                      : 'Pure Sine Wave'),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B6A3B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isGridTied
+                          ? '${(result.inverterCapacityVa / 1000).toStringAsFixed(1)} kW (220V/50Hz On-Grid)'
+                          : '${result.inverterVoltage.toInt()}V DC ➔ 220V AC, ≥ ${result.inverterCapacityVa.toInt()} VA',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  // 🛡️ সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
-  Widget _buildProtectionAndCablesCard(SolarCalculationResult result) {
+  Widget _buildProtectionAndCablesCard(
+    SolarCalculationResult result,
+    SystemSizingParams params,
+  ) {
+    final isGridTied = params.systemType == SolarSystemType.gridTied;
+    final isHybrid = params.systemType == SolarSystemType.hybrid;
+
     return _buildSectionCard(
       title: _isBangla
           ? 'সুরক্ষাব্যবস্থা ও ওয়্যারিং ক্যাবল'
           : 'Protection & Wiring Cables',
       icon: Icons.security_rounded,
       children: [
-        // প্রোগ্রেসিভ ডিসক্লোজার টগল বাটন
         _buildDisclosureToggle(
           isExpanded: _showProtectionDetails,
           onTap: () =>
               setState(() => _showProtectionDetails = !_showProtectionDetails),
         ),
-
-        // ব্যবহারকারী ট্যাপ করলে বিস্তারিত প্যারামিটার প্রদর্শিত হবে
         if (_showProtectionDetails) ...[
           const SizedBox(height: 8),
           Row(
@@ -592,33 +640,39 @@ class _SystemCalculationSummaryScreenState
               const SizedBox(width: 8),
               Expanded(
                 child: _buildDetailMetric(
-                  label: _isBangla ? 'ব্যাটারি ডিসি ফিউজ' : 'Battery DC Fuse',
-                  value: '≥ ${result.batteryFuseAmp.toInt()} A',
+                  label: isGridTied
+                      ? (_isBangla ? 'এসি গ্রিড ব্রেকার' : 'AC Grid MCB')
+                      : (_isBangla ? 'ব্যাটারি ডিসি ফিউজ' : 'Battery DC Fuse'),
+                  value: isGridTied
+                      ? '≥ ${result.acBreakerAmp.toInt()} A'
+                      : '≥ ${result.batteryFuseAmp.toInt()} A',
                 ),
               ),
             ],
           ),
-          if (result.hasAcLoad) ...[
+          if (!isGridTied) ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: _buildDetailMetric(
-                    label: _isBangla
-                        ? 'ইনভার্টার এসি ব্রেকার'
-                        : 'AC Output Breaker',
-                    value: '≥ ${result.acBreakerAmp.toInt()} A (220V)',
+                if (result.hasAcLoad)
+                  Expanded(
+                    child: _buildDetailMetric(
+                      label: _isBangla
+                          ? 'ইনভার্টার এসি ব্রেকার'
+                          : 'AC Output Breaker',
+                      value: '≥ ${result.acBreakerAmp.toInt()} A (220V)',
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildDetailMetric(
-                    label: _isBangla
-                        ? 'কন্ট্রোলার-ব্যাটারি ব্রেকার'
-                        : 'SCC Battery Breaker',
-                    value: '≥ ${result.chargeControllerBreakerAmp.toInt()} A',
+                if (result.hasAcLoad && !isHybrid) const SizedBox(width: 8),
+                if (!isHybrid)
+                  Expanded(
+                    child: _buildDetailMetric(
+                      label: _isBangla
+                          ? 'কন্ট্রোলার-ব্যাটারি ব্রেকার'
+                          : 'SCC Battery Breaker',
+                      value: '≥ ${result.chargeControllerBreakerAmp.toInt()} A',
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -633,15 +687,17 @@ class _SystemCalculationSummaryScreenState
                   value: result.pvCableSizeMm,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildDetailMetric(
-                  label: _isBangla
-                      ? 'ব্যাটারি তারের মাপ'
-                      : 'Battery Cable Size',
-                  value: result.batteryCableSizeMm,
+              if (!isGridTied) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildDetailMetric(
+                    label: _isBangla
+                        ? 'ব্যাটারি তারের মাপ'
+                        : 'Battery Cable Size',
+                    value: result.batteryCableSizeMm,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -653,6 +709,17 @@ class _SystemCalculationSummaryScreenState
     SolarCalculationResult result,
     SystemSizingParams params,
   ) {
+    String recapText;
+    if (params.systemType == SolarSystemType.gridTied) {
+      recapText = _isBangla
+          ? 'আপনার দৈনিক ${result.totalDailyWh.toStringAsFixed(0)} Wh চাহিদার জন্য মোট ${result.totalPanels}টি ${params.panelPmax.toInt()}Wp প্যানেল এবং একটি ${(result.inverterCapacityVa / 1000).toStringAsFixed(1)} kW অন-গ্রিড নেট-মিটারিং ইনভার্টার সুপারিশ করা হলো (ব্যাটারিহীন সিস্টেম)।'
+          : 'For your daily ${result.totalDailyWh.toStringAsFixed(0)} Wh load, ${result.totalPanels}x ${params.panelPmax.toInt()}Wp panels with a ${(result.inverterCapacityVa / 1000).toStringAsFixed(1)} kW Grid-Tied Inverter is recommended.';
+    } else {
+      recapText = _isBangla
+          ? 'আপনার দৈনিক ${result.totalDailyWh.toStringAsFixed(0)} Wh চাহিদার জন্য মোট ${result.totalPanels}টি ${params.panelPmax.toInt()}Wp প্যানেল এবং ${result.totalBatteries}টি ${params.batteryCapacityAh.toInt()}Ah ব্যাটারির এই কনফিগারেশনটি সুপারিশ করা হলো।'
+          : 'For your daily ${result.totalDailyWh.toStringAsFixed(0)} Wh load, a balanced system of ${result.totalPanels}x ${params.panelPmax.toInt()}Wp panels and ${result.totalBatteries}x ${params.batteryCapacityAh.toInt()}Ah batteries is recommended.';
+    }
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -671,9 +738,7 @@ class _SystemCalculationSummaryScreenState
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _isBangla
-                  ? 'আপনার দৈনিক ${result.totalDailyWh.toStringAsFixed(0)} Wh চাহিদার জন্য মোট ${result.totalPanels}টি ${params.panelPmax.toInt()}Wp প্যানেল এবং ${result.totalBatteries}টি ${params.batteryCapacityAh.toInt()}Ah ব্যাটারির এই কনফিগারেশনটি সুপারিশ করা হলো।'
-                  : 'For your daily ${result.totalDailyWh.toStringAsFixed(0)} Wh load, a balanced system of ${result.totalPanels}x ${params.panelPmax.toInt()}Wp panels and ${result.totalBatteries}x ${params.batteryCapacityAh.toInt()}Ah batteries is recommended.',
+              recapText,
               style: const TextStyle(
                 fontSize: 12,
                 color: Color(0xFF1B6A3B),
