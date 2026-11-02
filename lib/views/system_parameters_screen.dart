@@ -325,6 +325,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6A3B),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           _isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters',
           style: const TextStyle(

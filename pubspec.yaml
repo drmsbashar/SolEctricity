@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.0           # নাসা পাওয়ার এপিআই কলের জন্য
+  http: ^1.6.0           # নাসা পাওয়ার এপিআই কলের জন্য
   geolocator: ^11.0.0     # ডিভাইসের অক্ষাংশ ও দ্রাঘিমাংশ পাওয়ার জন্য
   geocoding: ^3.0.0      # রিভার্স জিওকোডিংয়ের জন্য
   pdf: ^3.10.8
@@ -43,6 +43,7 @@ dependencies:
   url_launcher: ^6.3.3
   flutter_compass: ^0.8.1
   sensors_plus: ^7.1.1
+  google_maps_flutter: ^2.19.0
 
 dev_dependencies:
   flutter_test:

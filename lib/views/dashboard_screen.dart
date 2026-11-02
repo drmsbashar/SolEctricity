@@ -13,7 +13,7 @@ import 'tools_screen.dart';
 import 'about_screen.dart';
 import 'license_screen.dart';
 import 'load_selection_screen.dart';
-import 'load_selection_screen.dart';
+import 'land_based_solar_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -320,6 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
+
     // Based on load / উপকরণভিত্তিক স্ক্রিনে যাওয়া
     final lower = option.toLowerCase();
     if (lower.contains('load') ||
@@ -337,6 +338,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
+
+    // 📍 স্থানভিত্তিক / Based on land স্ক্রিনে যাওয়া (নতুন যুক্ত করা হয়েছে)
+    if (lower.contains('land') ||
+        lower.contains('location') ||
+        option.contains('স্থান') ||
+        option.contains('জমি') ||
+        option.contains('স্থানভিত্তিক')) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LandBasedSolarScreen(isBangla: isBangla),
+        ),
+      );
+      return;
+    }
+
     if (option == 'Leveler' || option == 'লেভেলার' || option == 'সমতলকারী') {
       Navigator.push(
         context,

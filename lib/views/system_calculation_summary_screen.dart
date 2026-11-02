@@ -55,6 +55,7 @@ class _SystemCalculationSummaryScreenState
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6A3B),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           _isBangla ? 'সিস্টেম ক্যালকুলেশন সামারি' : 'System Sizing Summary',
           style: const TextStyle(

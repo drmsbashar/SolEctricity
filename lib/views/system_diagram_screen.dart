@@ -43,6 +43,28 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _isBangla = widget.isBangla;
   }
 
+  // 💡 অরিয়েন্টেশন পরিবর্তন মেথড (এখানে @override থাকবে না)
+  Future<void> _toggleOrientation() async {
+    final nextIsLandscape = !_isLandscape;
+    if (nextIsLandscape) {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeRight,
+        DeviceOrientation.landscapeLeft,
+      ]);
+    } else {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
+    if (mounted) {
+      setState(() {
+        _isLandscape = nextIsLandscape;
+      });
+    }
+  }
+
+  // 💡 স্ক্রিন থেকে ব্যাক করলে আগের মতো স্বাভাবিক পোর্ট্রেট/ল্যান্ডস্কেপ ফিরিয়ে দেওয়ার মেথড
   @override
   void dispose() {
     SystemChrome.setPreferredOrientations([
@@ -52,23 +74,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
       DeviceOrientation.landscapeRight,
     ]);
     super.dispose();
-  }
-
-  void _toggleOrientation() {
-    setState(() {
-      _isLandscape = !_isLandscape;
-      if (_isLandscape) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeRight,
-          DeviceOrientation.landscapeLeft,
-        ]);
-      } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-        ]);
-      }
-    });
   }
 
   void _resetZoom() {
@@ -452,7 +457,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                     ? '• অন-গ্রিড স্ট্রিং ইনভার্টার সোলার ডিসি ভোল্টেজকে সিনক্রোনাইজ করে ২২০V এসিতে রূপান্তর করে।\n• এর আউটপুট সরাসরি নেট-মিটার হয়ে মূল ডিস্ট্রিবিউশন বোর্ডে যুক্ত হয়।\n• গ্রিড অফ থাকলে নিরাপত্তা স্বার্থে এটি স্বয়ংক্রিয়ভাবে বন্ধ (Anti-Islanding) হয়ে যায়।'
                     : '• Grid-Tied Inverter synchronizes solar DC power to 220V grid AC.\n• Output directly connects to Net-Meter.\n• Features Anti-Islanding safety protection.')
               : (_isBangla
-                    ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিティブ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
+                    ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিটিভ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
                     : '• Inverter DC input connects directly to the Battery Bank (NEVER into charge controller DC load port!).\n• Install a ≥ ${widget.result.batteryFuseAmp.toInt()}A DC Fuse on the battery positive line.\n• AC 220V output routes to your home AC loads.'),
           style: const TextStyle(
             color: Colors.white70,
@@ -616,6 +621,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           _isBangla ? 'সিস্টেম ওয়্যারিং ডায়াগ্রাম' : 'System Wiring Diagram',
           style: const TextStyle(
@@ -635,7 +641,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             ),
             onPressed: _toggleOrientation,
           ),
-
           IconButton(
             tooltip: _isBangla ? 'রিসেট ভিউ' : 'Reset View',
             icon: const Icon(
@@ -683,7 +688,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             tooltip: _isBangla ? 'হোম / ড্যাশবোর্ড' : 'Dashboard / Home',
             icon: const Icon(Icons.home_rounded, color: Colors.white),
             onPressed: () {
-              // 💡 সরাসরি নেভিগেশন স্ট্যাকের প্রথম পেজে (Dashboard) ফিরে যাওয়ার কমান্ড
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
           ),
@@ -804,7 +808,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 60),
                       child: FittedBox(
                         fit: BoxFit.contain,
-                        // 📸 RepaintBoundary দিয়ে ফ্রেম র‍্যাপ করা হয়েছে
                         child: RepaintBoundary(
                           key: _diagramCanvasKey,
                           child: Container(
@@ -834,7 +837,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                                     isBangla: _isBangla,
                                   ),
                                 ),
-
                                 // ১. অফ-গ্রিড টাচ হটস্পটসমূহ
                                 if (!isGridTied && !isHybrid) ...[
                                   _buildTouchOverlay(
@@ -883,7 +885,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                                           : 'Tap: DC Loads',
                                     ),
                                 ],
-
                                 // ২. হাইব্রিড টাচ হটস্পটসমূহ
                                 if (isHybrid) ...[
                                   _buildTouchOverlay(
@@ -920,7 +921,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                                         : 'Tap: Utility Grid',
                                   ),
                                 ],
-
                                 // ৩. অন-গ্রিড টাচ হটস্পটসমূহ
                                 if (isGridTied) ...[
                                   _buildTouchOverlay(
