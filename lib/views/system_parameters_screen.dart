@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_colors.dart';
 import '../models/system_sizing_params.dart';
-import '../services/solar_radiation_service.dart';
 import '../services/solar_calculation_service.dart';
+import '../services/solar_radiation_service.dart';
+import '../widgets/theme_toggle_button.dart';
 import 'system_calculation_summary_screen.dart';
 import 'system_diagram_screen.dart';
 
@@ -162,18 +164,28 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     widget.onToggleLanguage();
   }
 
-  void _showStickerHelpDialog() {
+  void _showStickerHelpDialog(bool isDark) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.info_outline, color: Color(0xFF1B6A3B)),
+            Icon(
+              Icons.info_outline,
+              color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
+            ),
             const SizedBox(width: 8),
             Text(
               _isBangla ? 'প্যানেল স্পেক্স নির্দেশিকা' : 'PV Specs Guide',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+              ),
             ),
           ],
         ),
@@ -191,15 +203,21 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                     '• Imp: Current at maximum power (A)\n'
                     '• Isc: Short circuit current (A)\n\n'
                     'Tap any value box below to update them according to your exact panel sticker.',
-          style: const TextStyle(fontSize: 13, height: 1.4),
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.4,
+            color: isDark
+                ? AppColors.darkTextSecondary
+                : const Color(0xFF37474F),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
               _isBangla ? 'বুঝেছি' : 'Got it',
-              style: const TextStyle(
-                color: Color(0xFF1B6A3B),
+              style: TextStyle(
+                color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -215,12 +233,13 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required double min,
     required double max,
     required ValueChanged<double> onSubmitted,
+    required bool isDark,
   }) {
     final controller = TextEditingController(text: currentValue.toString());
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? AppColors.darkCardBg : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -237,7 +256,13 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           children: [
             Text(
               '${_isBangla ? "মান নির্ধারণ করুন" : "Set Value"}: $title',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -246,17 +271,31 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 decimal: true,
               ),
               autofocus: true,
+              style: TextStyle(
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+                fontWeight: FontWeight.bold,
+              ),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: const Color(0xFFF3F4F6),
+                fillColor: isDark
+                    ? AppColors.darkInputBg
+                    : AppColors.lightInputBg,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
+                  ),
                 ),
                 suffixIcon: IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.check_circle,
-                    color: Color(0xFF1B6A3B),
+                    color: isDark
+                        ? AppColors.accentCyan
+                        : AppColors.primaryGreen,
                   ),
                   onPressed: () {
                     final val = double.tryParse(controller.text);
@@ -276,11 +315,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final recommendedVoltage = _getRecommendedVoltage();
     final isGridTied = _selectedSystemType == SolarSystemType.gridTied;
     final isHybrid = _selectedSystemType == SolarSystemType.hybrid;
 
-    // 🔢 ডাইনামিক সেকশন সিরিয়াল কাউন্টার
     int secNum = 1;
     String getSecNum() {
       final current = secNum;
@@ -302,8 +341,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     }
 
     final approxPanels = (_params.panelPmax > 0 && _params.peakSunHours > 0)
-        ? ((widget.dailyTotalWh /
-                  (_params.peakSunHours * _params.panelPmax * 0.75)))
+        ? (widget.dailyTotalWh /
+                  (_params.peakSunHours * _params.panelPmax * 0.75))
               .ceil()
         : 1;
 
@@ -312,7 +351,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             _params.batteryCapacityAh > 0 &&
             _params.batteryDod > 0 &&
             _params.batteryEfficiency > 0)
-        ? ((widget.dailyTotalWh * _params.autonomyDays) /
+        ? (widget.dailyTotalWh *
+                  _params.autonomyDays /
                   (_params.systemVoltage *
                       _params.batteryCapacityAh *
                       (_params.batteryDod / 100) *
@@ -321,32 +361,21 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
         : 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8F7),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B6A3B),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          _isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
+        title: Text(_isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters'),
         actions: [
           IconButton(
             onPressed: _handleLanguageToggle,
             icon: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white.withAlpha(40),
+                color: Theme.of(context).dividerColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 _isBangla ? 'ENG' : 'বাংলা',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -355,617 +384,704 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                children: [
-                  // 🌟 সিস্টেম আর্কিটেকচার সিলেক্টর
-                  _buildSystemTypeSelector(),
-                  const SizedBox(height: 14),
-
-                  // কার্ড ১: সৌর বিকিরণ ও অবস্থান
-                  _buildCard(
-                    title: _isBangla
-                        ? '${getSecNum()}. সৌর বিকিরণ ও অবস্থান'
-                        : '${getSecNum()}. Solar Radiation & Location',
-                    icon: Icons.wb_sunny_rounded,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSmartSlider(
-                          label: _isBangla
-                              ? 'পিক সান আওয়ার (সৌর-সময়)'
-                              : 'Peak Sun Hours (PSH)',
-                          value: _params.peakSunHours,
-                          min: 2.0,
-                          max: 8.0,
-                          unit: 'h',
-                          divisions: 60,
-                          onChanged: (v) => setState(
-                            () => _params.peakSunHours = double.parse(
-                              v.toStringAsFixed(1),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _isLoadingPsh
-                                    ? (_isBangla
-                                          ? 'নাসা থেকে তথ্য নেওয়া হচ্ছে...'
-                                          : 'Fetching from NASA...')
-                                    : (_pshResult?.getMessage(_isBangla) ?? ''),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF1B6A3B),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: _isLoadingPsh
-                                  ? null
-                                  : _fetchNasaPshData,
-                              icon: _isLoadingPsh
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.refresh,
-                                      size: 20,
-                                      color: Color(0xFF1B6A3B),
-                                    ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // কার্ড ২: ডিসি বাস ভোল্টেজ ও চার্জ কন্ট্রোলার (শুধু অফ-গ্রিড ও হাইব্রিডের জন্য)
-                  if (!isGridTied) ...[
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? [AppColors.darkBgTop, AppColors.darkBgBottom]
+                : [AppColors.lightBgTop, AppColors.lightBgBottom],
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                child: Column(
+                  children: [
+                    _buildSystemTypeSelector(isDark),
+                    const SizedBox(height: 14),
                     _buildCard(
                       title: _isBangla
-                          ? '${getSecNum()}. সিস্টেম ভোল্টেজ ও কন্ট্রোলার'
-                          : '${getSecNum()}. Voltage & Controller',
-                      icon: Icons.electric_bolt_rounded,
+                          ? '${getSecNum()}. সৌর বিকিরণ ও অবস্থান'
+                          : '${getSecNum()}. Solar Radiation & Location',
+                      icon: Icons.wb_sunny_rounded,
+                      isDark: isDark,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [12.0, 24.0, 48.0].map((v) {
-                              final isSelected = _params.systemVoltage == v;
-                              final isRec = recommendedVoltage == v;
-                              return Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4.0,
-                                  ),
-                                  child: InkWell(
-                                    onTap: () => setState(
-                                      () => _params.systemVoltage = v,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? const Color(0xFF1B6A3B)
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? const Color(0xFF1B6A3B)
-                                              : Colors.grey.shade300,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Text(
-                                            '${v.toInt()} V',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 15,
-                                              color: isSelected
-                                                  ? Colors.white
-                                                  : Colors.black87,
-                                            ),
-                                          ),
-                                          if (isRec)
-                                            Text(
-                                              _isBangla
-                                                  ? 'প্রস্তাবিত'
-                                                  : 'Suggested',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: isSelected
-                                                    ? Colors.amberAccent
-                                                    : const Color(0xFF1B6A3B),
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          if (!isHybrid) ...[
-                            const Divider(height: 24),
-                            Text(
-                              _isBangla
-                                  ? 'কন্ট্রোলারের ধরন (Topology):'
-                                  : 'Controller Technology:',
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                          _buildSmartSlider(
+                            label: _isBangla
+                                ? 'পিক সান আওয়ার (সৌর-সময়)'
+                                : 'Peak Sun Hours (PSH)',
+                            value: _params.peakSunHours,
+                            min: 2.0,
+                            max: 8.0,
+                            unit: 'h',
+                            divisions: 60,
+                            isDark: isDark,
+                            onChanged: (v) => setState(
+                              () => _params.peakSunHours = double.parse(
+                                v.toStringAsFixed(1),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                _buildControllerTypeButton(
-                                  type: 'mppt',
-                                  title: 'MPPT (আধুনিক)',
-                                  subtitle: _isBangla
-                                      ? 'উচ্চ দক্ষতা (৯৭-৯৯%)'
-                                      : 'High Efficiency (98%)',
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _isLoadingPsh
+                                      ? (_isBangla
+                                            ? 'নাসা থেকে তথ্য নেওয়া হচ্ছে...'
+                                            : 'Fetching from NASA...')
+                                      : (_pshResult?.getMessage(_isBangla) ??
+                                            ''),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? AppColors.accentCyan
+                                        : AppColors.primaryGreen,
+                                    fontStyle: FontStyle.italic,
+                                  ),
                                 ),
-                                const SizedBox(width: 8),
-                                _buildControllerTypeButton(
-                                  type: 'pwm',
-                                  title: 'PWM (সাধারণ)',
-                                  subtitle: _isBangla
-                                      ? 'বাজেট-বান্ধব (৭০-৭৫%)'
-                                      : 'Budget (70-75%)',
+                              ),
+                              IconButton(
+                                onPressed: _isLoadingPsh
+                                    ? null
+                                    : _fetchNasaPshData,
+                                icon: _isLoadingPsh
+                                    ? SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: isDark
+                                              ? AppColors.accentCyan
+                                              : AppColors.primaryGreen,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.refresh,
+                                        size: 20,
+                                        color: isDark
+                                            ? AppColors.accentCyan
+                                            : AppColors.primaryGreen,
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    if (!isGridTied) ...[
+                      _buildCard(
+                        title: _isBangla
+                            ? '${getSecNum()}. সিস্টেম ভোল্টেজ ও কন্ট্রোলার'
+                            : '${getSecNum()}. Voltage & Controller',
+                        icon: Icons.electric_bolt_rounded,
+                        isDark: isDark,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [12.0, 24.0, 48.0].map((v) {
+                                final isSelected = _params.systemVoltage == v;
+                                final isRec = recommendedVoltage == v;
+                                return Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4.0,
+                                    ),
+                                    child: InkWell(
+                                      onTap: () => setState(
+                                        () => _params.systemVoltage = v,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? (isDark
+                                                    ? AppColors.accentCyan
+                                                    : AppColors.primaryGreen)
+                                              : (isDark
+                                                    ? AppColors.darkInputBg
+                                                    : AppColors.lightInputBg),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? (isDark
+                                                      ? AppColors.accentCyan
+                                                      : AppColors.primaryGreen)
+                                                : (isDark
+                                                      ? AppColors.darkBorder
+                                                      : AppColors.lightBorder),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              '${v.toInt()} V',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : (isDark
+                                                          ? AppColors
+                                                                .darkTextPrimary
+                                                          : AppColors
+                                                                .lightTextPrimary),
+                                              ),
+                                            ),
+                                            if (isRec)
+                                              Text(
+                                                _isBangla
+                                                    ? 'প্রস্তাবিত'
+                                                    : 'Suggested',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: isSelected
+                                                      ? AppColors.solarGold
+                                                      : (isDark
+                                                            ? AppColors
+                                                                  .accentCyan
+                                                            : AppColors
+                                                                  .primaryGreen),
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            if (!isHybrid) ...[
+                              Divider(
+                                height: 24,
+                                color: isDark
+                                    ? AppColors.darkBorder
+                                    : AppColors.lightBorder,
+                              ),
+                              Text(
+                                _isBangla
+                                    ? 'কন্ট্রোলারের ধরন (Topology):'
+                                    : 'Controller Technology:',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? AppColors.darkTextPrimary
+                                      : AppColors.lightTextPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  _buildControllerTypeButton(
+                                    type: 'mppt',
+                                    title: 'MPPT (আধুনিক)',
+                                    subtitle: _isBangla
+                                        ? 'উচ্চ দক্ষতা (৯৭-৯৯%)'
+                                        : 'High Efficiency (98%)',
+                                    isDark: isDark,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildControllerTypeButton(
+                                    type: 'pwm',
+                                    title: 'PWM (সাধারণ)',
+                                    subtitle: _isBangla
+                                        ? 'বাজেট-বান্ধব (৭০-৭৫%)'
+                                        : 'Budget (70-75%)',
+                                    isDark: isDark,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    _buildCard(
+                      title: _isBangla
+                          ? '${getSecNum()}. সোলার প্যানেল স্পেসিফিকেশন'
+                          : '${getSecNum()}. Solar PV Specs',
+                      icon: Icons.solar_power_rounded,
+                      isDark: isDark,
+                      action: IconButton(
+                        icon: Icon(
+                          Icons.help_outline_rounded,
+                          color: isDark
+                              ? AppColors.accentCyan
+                              : AppColors.primaryGreen,
+                          size: 20,
+                        ),
+                        onPressed: () => _showStickerHelpDialog(isDark),
+                        tooltip: _isBangla
+                            ? 'স্টিকার নির্দেশিকা'
+                            : 'Specs Guide',
+                      ),
+                      child: Column(
+                        children: [
+                          _buildPresetChips(
+                            items: _getRecommendedPanelPowers(),
+                            selectedValue: _params.panelPmax,
+                            unit: 'W',
+                            isDark: isDark,
+                            onSelected: (w) =>
+                                _updatePanelParametersFromWatts(w),
+                          ),
+                          const SizedBox(height: 14),
+                          _buildSmartSlider(
+                            label: _isBangla
+                                ? 'প্যানেল ওয়াট (Pmax)'
+                                : 'Rated Power (Pmax)',
+                            value: _params.panelPmax,
+                            min: 20.0,
+                            max: 700.0,
+                            unit: 'Wp',
+                            isDark: isDark,
+                            onChanged: (v) => _updatePanelParametersFromWatts(
+                              v.roundToDouble(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  (isDark
+                                          ? AppColors.accentCyan
+                                          : AppColors.primaryGreen)
+                                      .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 14,
+                                  color: isDark
+                                      ? AppColors.accentCyan
+                                      : AppColors.primaryGreen,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    _isBangla
+                                        ? 'প্যানেলের পেছনের স্টিকার অনুযায়ী মান পরিবর্তন করতে বক্সে ট্যাপ করুন।'
+                                        : 'Tap on any parameter box below to enter values from panel sticker.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark
+                                          ? AppColors.accentCyan
+                                          : AppColors.primaryGreen,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-
-                  // কার্ড: সোলার প্যানেল স্পেসিফিকেশন (স্বয়ংক্রিয় ক্রম নম্বর)
-                  _buildCard(
-                    title: _isBangla
-                        ? '${getSecNum()}. সোলার প্যানেল স্পেসিফিকেশন'
-                        : '${getSecNum()}. Solar PV Specs',
-                    icon: Icons.solar_power_rounded,
-                    action: IconButton(
-                      icon: const Icon(
-                        Icons.help_outline_rounded,
-                        color: Color(0xFF1B6A3B),
-                        size: 20,
-                      ),
-                      onPressed: _showStickerHelpDialog,
-                      tooltip: _isBangla ? 'স্টিকার নির্দেশিকা' : 'Specs Guide',
-                    ),
-                    child: Column(
-                      children: [
-                        _buildPresetChips(
-                          items: _getRecommendedPanelPowers(),
-                          selectedValue: _params.panelPmax,
-                          unit: 'W',
-                          onSelected: (w) => _updatePanelParametersFromWatts(w),
-                        ),
-                        const SizedBox(height: 14),
-                        _buildSmartSlider(
-                          label: _isBangla
-                              ? 'প্যানেল ওয়াট (Pmax)'
-                              : 'Rated Power (Pmax)',
-                          value: _params.panelPmax,
-                          min: 20.0,
-                          max: 700.0,
-                          unit: 'Wp',
-                          onChanged: (v) => _updatePanelParametersFromWatts(
-                            v.roundToDouble(),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6F2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
+                          const SizedBox(height: 12),
+                          Row(
                             children: [
-                              const Icon(
-                                Icons.info_outline,
-                                size: 14,
-                                color: Color(0xFF1B6A3B),
-                              ),
-                              const SizedBox(width: 6),
                               Expanded(
-                                child: Text(
-                                  _isBangla
-                                      ? 'প্যানেলের পেছনের স্টিকার অনুযায়ী মান পরিবর্তন করতে বক্সে ট্যাপ করুন।'
-                                      : 'Tap on any parameter box below to enter values from panel sticker.',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF1B6A3B),
+                                child: _buildCompactMetricField(
+                                  label: 'Voc',
+                                  value: '${_params.panelVoc} V',
+                                  isDark: isDark,
+                                  onTap: () => _openDirectValueEditor(
+                                    title: 'Voc (V)',
+                                    currentValue: _params.panelVoc,
+                                    min: 10.0,
+                                    max: 70.0,
+                                    isDark: isDark,
+                                    onSubmitted: (val) =>
+                                        setState(() => _params.panelVoc = val),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildCompactMetricField(
+                                  label: 'Imp',
+                                  value: '${_params.panelImp} A',
+                                  isDark: isDark,
+                                  onTap: () => _openDirectValueEditor(
+                                    title: 'Imp (A)',
+                                    currentValue: _params.panelImp,
+                                    min: 1.0,
+                                    max: 30.0,
+                                    isDark: isDark,
+                                    onSubmitted: (val) =>
+                                        setState(() => _params.panelImp = val),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildCompactMetricField(
+                                  label: 'Isc',
+                                  value: '${_params.panelIsc} A',
+                                  isDark: isDark,
+                                  onTap: () => _openDirectValueEditor(
+                                    title: 'Isc (A)',
+                                    currentValue: _params.panelIsc,
+                                    min: 1.0,
+                                    max: 35.0,
+                                    isDark: isDark,
+                                    onSubmitted: (val) =>
+                                        setState(() => _params.panelIsc = val),
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildCompactMetricField(
-                                label: 'Voc',
-                                value: '${_params.panelVoc} V',
-                                onTap: () => _openDirectValueEditor(
-                                  title: 'Voc (V)',
-                                  currentValue: _params.panelVoc,
-                                  min: 10.0,
-                                  max: 70.0,
-                                  onSubmitted: (val) =>
-                                      setState(() => _params.panelVoc = val),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _buildCompactMetricField(
-                                label: 'Imp',
-                                value: '${_params.panelImp} A',
-                                onTap: () => _openDirectValueEditor(
-                                  title: 'Imp (A)',
-                                  currentValue: _params.panelImp,
-                                  min: 1.0,
-                                  max: 30.0,
-                                  onSubmitted: (val) =>
-                                      setState(() => _params.panelImp = val),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _buildCompactMetricField(
-                                label: 'Isc',
-                                value: '${_params.panelIsc} A',
-                                onTap: () => _openDirectValueEditor(
-                                  title: 'Isc (A)',
-                                  currentValue: _params.panelIsc,
-                                  min: 1.0,
-                                  max: 35.0,
-                                  onSubmitted: (val) =>
-                                      setState(() => _params.panelIsc = val),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // কার্ড: ব্যাটারি ব্যাংক কনফিগারেশন (অন-গ্রিড হলে স্বয়ংক্রিয়ভাবে বাদ পড়বে)
-                  if (!isGridTied) ...[
-                    _buildCard(
-                      title: _isBangla
-                          ? '${getSecNum()}. ব্যাটারি ব্যাংক কনফিগারেশন'
-                          : '${getSecNum()}. Battery Bank Configuration',
-                      icon: Icons.battery_charging_full_rounded,
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              _buildBatteryTypeButton(
-                                'lead_acid',
-                                _isBangla ? 'লেড-এসিড' : 'Lead-Acid',
-                              ),
-                              const SizedBox(width: 6),
-                              _buildBatteryTypeButton(
-                                'tubular',
-                                _isBangla ? 'টিউবুলার' : 'Tubular',
-                              ),
-                              const SizedBox(width: 6),
-                              _buildBatteryTypeButton(
-                                'lithium',
-                                _isBangla ? 'লিথিয়াম' : 'Lithium',
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          _buildPresetChips(
-                            items: _getRecommendedBatteryCapacities(),
-                            selectedValue: _params.batteryCapacityAh,
-                            unit: 'Ah',
-                            onSelected: (ah) =>
-                                setState(() => _params.batteryCapacityAh = ah),
-                          ),
-                          const SizedBox(height: 14),
-                          _buildSmartSlider(
-                            label: _isBangla
-                                ? 'ব্যাটারি ক্যাপাসিটি'
-                                : 'Battery Capacity',
-                            value: _params.batteryCapacityAh,
-                            min: 20.0,
-                            max: 400.0,
-                            unit: 'Ah',
-                            onChanged: (v) => setState(
-                              () =>
-                                  _params.batteryCapacityAh = v.roundToDouble(),
-                            ),
-                          ),
-                          _buildSmartSlider(
-                            label: _isBangla
-                                ? 'ব্যবহারের অংশ (DoD)'
-                                : 'Depth of Discharge (DoD)',
-                            value: _params.batteryDod,
-                            min: 20.0,
-                            max: 95.0,
-                            unit: '%',
-                            onChanged: (v) => setState(
-                              () => _params.batteryDod = v.roundToDouble(),
-                            ),
-                          ),
-                          _buildSmartSlider(
-                            label: _isBangla
-                                ? 'ব্যাটারির কর্মক্ষমতা'
-                                : 'Battery Efficiency',
-                            value: _params.batteryEfficiency,
-                            min: 50.0,
-                            max: 98.0,
-                            unit: '%',
-                            onChanged: (v) => setState(
-                              () =>
-                                  _params.batteryEfficiency = v.roundToDouble(),
-                            ),
-                          ),
-                          _buildSmartSlider(
-                            label: _isBangla
-                                ? 'মেঘলা দিন ব্যাকআপ'
-                                : 'Autonomy (Backup)',
-                            value: _params.autonomyDays.toDouble(),
-                            min: 1.0,
-                            max: 5.0,
-                            divisions: 4,
-                            unit: _isBangla ? 'দিন' : 'Days',
-                            onChanged: (v) => setState(
-                              () => _params.autonomyDays = v.toInt(),
-                            ),
-                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 14),
-                  ],
-
-                  // কার্ড: ইনভার্টার প্যারামিটার
-                  if (widget.acPeakWatt > 0 || isGridTied || isHybrid)
-                    _buildCard(
-                      title: _isBangla
-                          ? (isGridTied
-                                ? '${getSecNum()}. অন-গ্রিড ইনভার্টার প্যারামিটার'
-                                : '${getSecNum()}. ইনভার্টার প্যারামিটার')
-                          : '${getSecNum()}. Inverter Settings',
-                      icon: Icons.sync_alt_rounded,
-                      child: Column(
-                        children: [
-                          _buildSmartSlider(
-                            label: _isBangla
-                                ? 'কর্মক্ষমতা (Efficiency)'
-                                : 'Efficiency',
-                            value: _params.inverterEfficiency,
-                            min: 75.0,
-                            max: 98.0,
-                            unit: '%',
-                            onChanged: (v) => setState(
-                              () => _params.inverterEfficiency = v
-                                  .roundToDouble(),
+                    if (!isGridTied) ...[
+                      _buildCard(
+                        title: _isBangla
+                            ? '${getSecNum()}. ব্যাটারি ব্যাংক কনফিগারেশন'
+                            : '${getSecNum()}. Battery Bank Configuration',
+                        icon: Icons.battery_charging_full_rounded,
+                        isDark: isDark,
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                _buildBatteryTypeButton(
+                                  'lead_acid',
+                                  _isBangla ? 'লেড-এসিড' : 'Lead-Acid',
+                                  isDark,
+                                ),
+                                const SizedBox(width: 6),
+                                _buildBatteryTypeButton(
+                                  'tubular',
+                                  _isBangla ? 'টিউবুলার' : 'Tubular',
+                                  isDark,
+                                ),
+                                const SizedBox(width: 6),
+                                _buildBatteryTypeButton(
+                                  'lithium',
+                                  _isBangla ? 'লিথিয়াম' : 'Lithium',
+                                  isDark,
+                                ),
+                              ],
                             ),
-                          ),
-                          _buildSmartSlider(
-                            label: _isBangla
-                                ? 'পাওয়ার ফ্যাক্টর'
-                                : 'Power Factor',
-                            value: _params.inverterPowerFactor,
-                            min: 0.70,
-                            max: 1.0,
-                            divisions: 30,
-                            unit: '',
-                            onChanged: (v) => setState(
-                              () => _params.inverterPowerFactor = double.parse(
-                                v.toStringAsFixed(2),
+                            const SizedBox(height: 14),
+                            _buildPresetChips(
+                              items: _getRecommendedBatteryCapacities(),
+                              selectedValue: _params.batteryCapacityAh,
+                              unit: 'Ah',
+                              isDark: isDark,
+                              onSelected: (ah) => setState(
+                                () => _params.batteryCapacityAh = ah,
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 14),
+                            _buildSmartSlider(
+                              label: _isBangla
+                                  ? 'ব্যাটারি ক্যাপাসিটি'
+                                  : 'Battery Capacity',
+                              value: _params.batteryCapacityAh,
+                              min: 20.0,
+                              max: 400.0,
+                              unit: 'Ah',
+                              isDark: isDark,
+                              onChanged: (v) => setState(
+                                () => _params.batteryCapacityAh = v
+                                    .roundToDouble(),
+                              ),
+                            ),
+                            _buildSmartSlider(
+                              label: _isBangla
+                                  ? 'ব্যবহারের অংশ (DoD)'
+                                  : 'Depth of Discharge (DoD)',
+                              value: _params.batteryDod,
+                              min: 20.0,
+                              max: 95.0,
+                              unit: '%',
+                              isDark: isDark,
+                              onChanged: (v) => setState(
+                                () => _params.batteryDod = v.roundToDouble(),
+                              ),
+                            ),
+                            _buildSmartSlider(
+                              label: _isBangla
+                                  ? 'ব্যাটারির কর্মক্ষমতা'
+                                  : 'Battery Efficiency',
+                              value: _params.batteryEfficiency,
+                              min: 50.0,
+                              max: 98.0,
+                              unit: '%',
+                              isDark: isDark,
+                              onChanged: (v) => setState(
+                                () => _params.batteryEfficiency = v
+                                    .roundToDouble(),
+                              ),
+                            ),
+                            _buildSmartSlider(
+                              label: _isBangla
+                                  ? 'মেঘলা দিন ব্যাকআপ'
+                                  : 'Autonomy (Backup)',
+                              value: _params.autonomyDays.toDouble(),
+                              min: 1.0,
+                              max: 5.0,
+                              divisions: 4,
+                              unit: _isBangla ? 'দিন' : 'Days',
+                              isDark: isDark,
+                              onChanged: (v) => setState(
+                                () => _params.autonomyDays = v.toInt(),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (widget.acPeakWatt > 0 || isGridTied || isHybrid)
+                      _buildCard(
+                        title: _isBangla
+                            ? (isGridTied
+                                  ? '${getSecNum()}. অন-গ্রিড ইনভার্টার প্যারামিটার'
+                                  : '${getSecNum()}. ইনভার্টার প্যারামিটার')
+                            : '${getSecNum()}. Inverter Settings',
+                        icon: Icons.sync_alt_rounded,
+                        isDark: isDark,
+                        child: Column(
+                          children: [
+                            _buildSmartSlider(
+                              label: _isBangla
+                                  ? 'কর্মক্ষমতা (Efficiency)'
+                                  : 'Efficiency',
+                              value: _params.inverterEfficiency,
+                              min: 75.0,
+                              max: 98.0,
+                              unit: '%',
+                              isDark: isDark,
+                              onChanged: (v) => setState(
+                                () => _params.inverterEfficiency = v
+                                    .roundToDouble(),
+                              ),
+                            ),
+                            _buildSmartSlider(
+                              label: _isBangla
+                                  ? 'পাওয়ার ফ্যাক্টর'
+                                  : 'Power Factor',
+                              value: _params.inverterPowerFactor,
+                              min: 0.70,
+                              max: 1.0,
+                              divisions: 30,
+                              unit: '',
+                              isDark: isDark,
+                              onChanged: (v) => setState(
+                                () => _params.inverterPowerFactor =
+                                    double.parse(v.toStringAsFixed(2)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.darkCardBg
+                    : Colors.white, // 👈 খাঁটি সাদা
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                border: Border(
+                  top: BorderSide(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : const Color(0xFFCBD5E1).withValues(alpha: 0.6),
+                  ),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A)
+                        .withValues(alpha: isDark ? 0.35 : 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, -4),
+                  ),
                 ],
               ),
-            ),
-          ),
-
-          // বটম সামারি বার
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(20),
-                  blurRadius: 10,
-                  offset: const Offset(0, -3),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildQuickKPI(
-                        label: _isBangla ? 'সিস্টেম টাইপ' : 'Architecture',
-                        value: isGridTied
-                            ? 'On-Grid'
-                            : (isHybrid
-                                  ? 'Hybrid'
-                                  : _params.controllerType.toUpperCase()),
-                        icon: isGridTied
-                            ? Icons.solar_power
-                            : (isHybrid ? Icons.sync_alt : Icons.tune_rounded),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 28,
-                        color: Colors.grey.shade300,
-                      ),
-                      _buildQuickKPI(
-                        label: _isBangla ? 'প্যানেল সংখ্যা' : 'Est. Panels',
-                        value: '~$approxPanels pcs',
-                        icon: Icons.solar_power,
-                      ),
-                      if (!isGridTied) ...[
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildQuickKPI(
+                          label: _isBangla ? 'সিস্টেম টাইপ' : 'Architecture',
+                          value: isGridTied
+                              ? 'On-Grid'
+                              : (isHybrid
+                                    ? 'Hybrid'
+                                    : _params.controllerType.toUpperCase()),
+                          icon: isGridTied
+                              ? Icons.solar_power
+                              : (isHybrid
+                                    ? Icons.sync_alt
+                                    : Icons.tune_rounded),
+                          isDark: isDark,
+                        ),
                         Container(
                           width: 1,
                           height: 28,
-                          color: Colors.grey.shade300,
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : AppColors.lightBorder,
                         ),
                         _buildQuickKPI(
-                          label: _isBangla
-                              ? 'ব্যাটারি সংখ্যা'
-                              : 'Est. Batteries',
-                          value: '~$approxBatteries pcs',
-                          icon: Icons.battery_charging_full,
+                          label: _isBangla ? 'প্যানেল সংখ্যা' : 'Est. Panels',
+                          value: '~$approxPanels pcs',
+                          icon: Icons.solar_power,
+                          isDark: isDark,
                         ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1B6A3B),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      onPressed: () {
-                        final double acWh = widget.dailyAcWh > 0
-                            ? widget.dailyAcWh
-                            : (widget.acPeakWatt > 0
-                                  ? widget.dailyTotalWh
-                                  : 0.0);
-                        final double dcWh = widget.dailyDcWh > 0
-                            ? widget.dailyDcWh
-                            : (widget.acPeakWatt == 0
-                                  ? widget.dailyTotalWh
-                                  : 0.0);
-
-                        final finalParams = _params.copyWith(
-                          systemType: _selectedSystemType,
-                        );
-
-                        final result = SolarCalculationService.calculate(
-                          dailyAcWh: acWh,
-                          dailyDcWh: dcWh,
-                          acPeakWatt: widget.acPeakWatt,
-                          params: finalParams,
-                        );
-
-                        // 👉 ১-ক্লিকে সরাসরি সামারি পেজে নেভিগেশন (ডাবল প্রেস ফিক্সড)
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                SystemCalculationSummaryScreen(
-                                  result: result,
-                                  params: finalParams,
-                                  isBangla: _isBangla,
-                                  onProceedToDiagram: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            SystemDiagramScreen(
-                                              result: result,
-                                              params: finalParams,
-                                              isBangla: _isBangla,
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                        if (!isGridTied) ...[
+                          Container(
+                            width: 1,
+                            height: 28,
+                            color: isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
                           ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                      ),
-                      label: Text(
-                        _isBangla
-                            ? 'পরবর্তী: চূড়ান্ত হিসাব ও ডায়াগ্রাম'
-                            : 'Calculate & View Diagram',
-                        style: const TextStyle(
+                          _buildQuickKPI(
+                            label: _isBangla
+                                ? 'ব্যাটারি সংখ্যা'
+                                : 'Est. Batteries',
+                            value: '~$approxBatteries pcs',
+                            icon: Icons.battery_charging_full,
+                            isDark: isDark,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark
+                              ? AppColors.energyGreen
+                              : AppColors.primaryGreen,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: () {
+                          final double acWh = widget.dailyAcWh > 0
+                              ? widget.dailyAcWh
+                              : (widget.acPeakWatt > 0
+                                    ? widget.dailyTotalWh
+                                    : 0.0);
+                          final double dcWh = widget.dailyDcWh > 0
+                              ? widget.dailyDcWh
+                              : (widget.acPeakWatt == 0
+                                    ? widget.dailyTotalWh
+                                    : 0.0);
+
+                          final finalParams = _params.copyWith(
+                            systemType: _selectedSystemType,
+                          );
+
+                          final result = SolarCalculationService.calculate(
+                            dailyAcWh: acWh,
+                            dailyDcWh: dcWh,
+                            acPeakWatt: widget.acPeakWatt,
+                            params: finalParams,
+                          );
+
+                          widget.onProceedToFinalResults(finalParams);
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  SystemCalculationSummaryScreen(
+                                    result: result,
+                                    params: finalParams,
+                                    isBangla: _isBangla,
+                                    onProceedToDiagram: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              SystemDiagramScreen(
+                                                result: result,
+                                                params: finalParams,
+                                                isBangla: _isBangla,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Icons.arrow_forward_rounded,
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
+                        ),
+                        label: Text(
+                          _isBangla
+                              ? 'পরবর্তী: চূড়ান্ত হিসাব ও ডায়াগ্রাম'
+                              : 'Calculate & View Diagram',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // 🌟 সিস্টেম আর্কিটেকচার সিলেক্টর উইজেট
-  Widget _buildSystemTypeSelector() {
+  Widget _buildSystemTypeSelector(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -974,10 +1090,12 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             _isBangla
                 ? 'সিস্টেম আর্কিটেকচার নির্বাচন করুন:'
                 : 'Select System Architecture:',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E293B),
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.lightTextPrimary,
             ),
           ),
           const SizedBox(height: 10),
@@ -988,6 +1106,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 title: _isBangla ? 'অফ-গ্রিড' : 'Off-Grid',
                 subtitle: _isBangla ? 'ব্যাটারি + কন্ট্রোলার' : 'Battery + SCC',
                 icon: Icons.power_off_rounded,
+                isDark: isDark,
               ),
               const SizedBox(width: 8),
               _buildTypeCard(
@@ -997,6 +1116,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                     ? 'অল-ইন-ওয়ান + গ্রিড'
                     : 'All-in-One + Grid',
                 icon: Icons.sync_alt_rounded,
+                isDark: isDark,
               ),
               const SizedBox(width: 8),
               _buildTypeCard(
@@ -1006,6 +1126,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                     ? 'নেট-মিটার (ব্যাটারিহীন)'
                     : 'Net-Meter (No Bat)',
                 icon: Icons.solar_power_rounded,
+                isDark: isDark,
               ),
             ],
           ),
@@ -1019,8 +1140,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required String title,
     required String subtitle,
     required IconData icon,
+    required bool isDark,
   }) {
     final isSelected = _selectedSystemType == type;
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+
     return Expanded(
       child: InkWell(
         onTap: () {
@@ -1036,13 +1160,19 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF1B6A3B).withAlpha(15)
-                : const Color(0xFFF8FAFC),
+                ? (isDark
+                      ? activeColor.withValues(alpha: 0.15)
+                      : const Color(
+                          0xFFDCFCE7,
+                        )) // 👈 সিলেক্টেড হলে সতেজ সফট মিন্ট
+                : (isDark
+                      ? AppColors.darkInputBg
+                      : Colors.white), // 👈 বাকিগুলো পিওর হোয়াইট
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFF1B6A3B)
-                  : Colors.grey.shade300,
+                  ? activeColor
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
               width: isSelected ? 2.0 : 1.0,
             ),
           ),
@@ -1051,8 +1181,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               Icon(
                 icon,
                 color: isSelected
-                    ? const Color(0xFF1B6A3B)
-                    : Colors.grey.shade600,
+                    ? activeColor
+                    : (isDark ? Colors.white60 : Colors.grey.shade600),
                 size: 24,
               ),
               const SizedBox(height: 5),
@@ -1063,8 +1193,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: isSelected
-                      ? const Color(0xFF1B6A3B)
-                      : const Color(0xFF334155),
+                      ? activeColor
+                      : (isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary),
                 ),
               ),
               const SizedBox(height: 2),
@@ -1075,8 +1207,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 style: TextStyle(
                   fontSize: 9,
                   color: isSelected
-                      ? const Color(0xFF1B6A3B)
-                      : Colors.grey.shade600,
+                      ? activeColor
+                      : (isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
                 ),
               ),
             ],
@@ -1091,20 +1225,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required IconData icon,
     required Widget child,
     Widget? action,
+    required bool isDark,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: AppColors.cardDecoration(isDark), // 👈 সরাসরি সেন্ট্রাল মেথড
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1113,14 +1238,22 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             children: [
               Row(
                 children: [
-                  Icon(icon, size: 20, color: const Color(0xFF1B6A3B)),
+                  Icon(
+                    icon,
+                    size: 20,
+                    color: isDark
+                        ? AppColors.accentCyan
+                        : AppColors.primaryGreen,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14.5,
-                      color: Color(0xFF1B6A3B),
+                      color: isDark
+                          ? AppColors.accentCyan
+                          : const Color(0xFF134E4A),
                     ),
                   ),
                 ],
@@ -1139,8 +1272,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required String type,
     required String title,
     required String subtitle,
+    required bool isDark,
   }) {
     final isSelected = _params.controllerType == type;
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => _params.controllerType = type),
@@ -1149,13 +1285,19 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF1B6A3B).withAlpha(20)
-                : const Color(0xFFF9FAFB),
+                ? (isDark
+                      ? activeColor.withValues(alpha: 0.15)
+                      : const Color(
+                          0xFFDCFCE7,
+                        )) // 👈 সিলেক্টেড হলে সতেজ সফট মিন্ট
+                : (isDark
+                      ? AppColors.darkInputBg
+                      : Colors.white), // 👈 বাকিগুলো পিওর হোয়াইট
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFF1B6A3B)
-                  : Colors.grey.shade300,
+                  ? activeColor
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
               width: 1.5,
             ),
           ),
@@ -1166,7 +1308,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
-                  color: isSelected ? const Color(0xFF1B6A3B) : Colors.black87,
+                  color: isSelected
+                      ? activeColor
+                      : (isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary),
                 ),
               ),
               const SizedBox(height: 2),
@@ -1175,8 +1321,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 style: TextStyle(
                   fontSize: 10.5,
                   color: isSelected
-                      ? const Color(0xFF1B6A3B)
-                      : Colors.grey.shade600,
+                      ? activeColor
+                      : (isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
                 ),
               ),
             ],
@@ -1194,7 +1342,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required String unit,
     int? divisions,
     required ValueChanged<double> onChanged,
+    required bool isDark,
   }) {
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1203,9 +1354,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: Colors.black87,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1216,6 +1369,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 min: min,
                 max: max,
                 onSubmitted: onChanged,
+                isDark: isDark,
               ),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -1223,18 +1377,25 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                   vertical: 3,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6F2),
+                  // লাইট মোডে সফট অ্যাম্বার ও ডার্কে সায়ান গ্লো
+                  color: isDark
+                      ? activeColor.withValues(alpha: 0.12)
+                      : const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: const Color(0xFF1B6A3B).withAlpha(40),
+                    color: isDark
+                        ? activeColor.withValues(alpha: 0.3)
+                        : const Color(0xFFF59E0B).withValues(alpha: 0.4),
                   ),
                 ),
                 child: Text(
                   unit.isNotEmpty ? '$value $unit' : '$value',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1B6A3B),
+                    color: isDark
+                        ? activeColor
+                        : const Color(0xFFB45309), // রিচ অ্যাম্বার টেক্সট
                   ),
                 ),
               ),
@@ -1243,10 +1404,12 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
         ),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: const Color(0xFF1B6A3B),
-            inactiveTrackColor: const Color(0xFFE5E7EB),
-            thumbColor: const Color(0xFF1B6A3B),
-            overlayColor: const Color(0xFF1B6A3B).withAlpha(30),
+            activeTrackColor: activeColor,
+            inactiveTrackColor: isDark
+                ? Colors.white12
+                : const Color(0xFFE2E8F0),
+            thumbColor: activeColor,
+            overlayColor: activeColor.withValues(alpha: 0.2),
             trackHeight: 4,
           ),
           child: Slider(
@@ -1266,7 +1429,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required double selectedValue,
     required String unit,
     required ValueChanged<double> onSelected,
+    required bool isDark,
   }) {
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+
     return Row(
       children: items.map((val) {
         final isSelected = selectedValue == val;
@@ -1282,13 +1448,17 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                     fontWeight: isSelected
                         ? FontWeight.bold
                         : FontWeight.normal,
-                    color: isSelected ? Colors.white : Colors.black87,
+                    color: isSelected
+                        ? Colors.white
+                        : (isDark ? Colors.white70 : Colors.black87),
                   ),
                 ),
               ),
               selected: isSelected,
-              selectedColor: const Color(0xFF1B6A3B),
-              backgroundColor: const Color(0xFFF3F4F6),
+              selectedColor: activeColor,
+              backgroundColor: isDark
+                  ? AppColors.darkInputBg
+                  : AppColors.lightInputBg,
               showCheckmark: false,
               padding: EdgeInsets.zero,
               onSelected: (_) => onSelected(val),
@@ -1299,8 +1469,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     );
   }
 
-  Widget _buildBatteryTypeButton(String key, String label) {
+  Widget _buildBatteryTypeButton(String key, String label, bool isDark) {
     final isSelected = _selectedBatteryType == key;
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+
     return Expanded(
       child: InkWell(
         onTap: () => _applyBatteryTypePreset(key),
@@ -1309,11 +1481,19 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF1B6A3B).withAlpha(25)
-                : const Color(0xFFF3F4F6),
+                ? (isDark
+                      ? activeColor.withValues(alpha: 0.15)
+                      : const Color(
+                          0xFFDCFCE7,
+                        )) // 👈 সিলেক্টেড হলে সতেজ সফট মিন্ট
+                : (isDark
+                      ? AppColors.darkInputBg
+                      : Colors.white), // 👈 বাকিগুলো পিওর হোয়াইট
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? const Color(0xFF1B6A3B) : Colors.transparent,
+              color: isSelected
+                  ? activeColor
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
               width: 1.5,
             ),
           ),
@@ -1323,7 +1503,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? const Color(0xFF1B6A3B) : Colors.black87,
+                color: isSelected
+                    ? activeColor
+                    : (isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary),
               ),
             ),
           ),
@@ -1336,6 +1520,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required String label,
     required String value,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return InkWell(
       onTap: onTap,
@@ -1343,27 +1528,33 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
+          color: isDark ? AppColors.darkInputBg : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(
+            color: isDark ? AppColors.darkBorder : const Color(0xFFE2E8F0),
+          ),
         ),
         child: Column(
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: Colors.grey,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.lightTextSecondary,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
               ),
             ),
           ],
@@ -1376,24 +1567,43 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required String label,
     required String value,
     required IconData icon,
+    required bool isDark,
   }) {
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+
     return Row(
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF1B6A3B)),
-        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: isDark
+                ? activeColor.withValues(alpha: 0.15)
+                : const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: activeColor),
+        ),
+        const SizedBox(width: 8),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               label,
-              style: const TextStyle(fontSize: 10.5, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 10.5,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.lightTextSecondary,
+              ),
             ),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
               ),
             ),
           ],

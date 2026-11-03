@@ -5,13 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
+import '../constants/app_colors.dart';
+import '../models/system_sizing_params.dart';
+import '../services/solar_calculation_service.dart';
 import '../services/solar_radiation_service.dart';
+import '../widgets/theme_toggle_button.dart';
 
-enum SystemType { onGrid, hybrid, offGrid }
-
-// =========================================================================
-// 🌐 ১. ডাইনামিক কারেন্সি এক্সচেঞ্জ সার্ভিস
-// =========================================================================
 class CurrencyService {
   static double _cachedUsdToBdt = 120.0;
   static DateTime? _lastFetchTime;
@@ -38,11 +37,7 @@ class CurrencyService {
   }
 }
 
-// =========================================================================
-// 🔤 ২. পিওর ডার্ট কমা ফরম্যাটার (intl প্যাকেজ ছাড়াই)
-// =========================================================================
 class CurrencyFormatter {
-  // 🇧🇩 বাংলাদেশী ফরম্যাট (শেষ ৩ ঘর, এরপর প্রতি ২ ঘর পর পর কমা)
   static String formatBdt(num amount, {bool showSymbol = true}) {
     final int rounded = amount.round();
     final String str = rounded.toString();
@@ -54,7 +49,6 @@ class CurrencyFormatter {
       final String lastThree = str.substring(str.length - 3);
       final String remaining = str.substring(0, str.length - 3);
 
-      // শেষ তিন ঘরের আগের অংশকে প্রতি ২ ঘর পর পর কমা দিয়ে সাজানো
       final String formattedRemaining = remaining.replaceAllMapped(
         RegExp(r'(\d)(?=(\d{2})+(?!\d))'),
         (Match m) => '${m[1]},',
@@ -65,7 +59,6 @@ class CurrencyFormatter {
     return showSymbol ? '৳ $formatted' : formatted;
   }
 
-  // 🌐 আন্তর্জাতিক ফরম্যাট (ডানদিক থেকে প্রতি ৩ ঘর পর পর কমা)
   static String formatUsd(
     num amount, {
     bool showSymbol = true,
@@ -74,7 +67,6 @@ class CurrencyFormatter {
     final String fixedStr = amount.toStringAsFixed(decimals);
     final List<String> parts = fixedStr.split('.');
 
-    // পূর্ণসংখ্যার অংশে প্রতি ৩ ঘর পর পর কমা বসানো
     final String integerPart = parts[0].replaceAllMapped(
       RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]},',
@@ -86,19 +78,11 @@ class CurrencyFormatter {
     return showSymbol ? '\$ $formatted' : formatted;
   }
 
-  // 🔄 ভাষা (বাংলা/ইংরেজি) অনুযায়ী স্বয়ংক্রিয়ভাবে নির্ধারণ
   static String format(num amount, bool isBangla, {int decimals = 0}) {
-    if (isBangla) {
-      return formatBdt(amount);
-    } else {
-      return formatUsd(amount, decimals: decimals);
-    }
+    return isBangla ? formatBdt(amount) : formatUsd(amount, decimals: decimals);
   }
 }
 
-// =========================================================================
-// 📱 ৩. মূল কস্ট-বেসড সোলার সাইজিং স্ক্রিন
-// =========================================================================
 class CostBasedSolarScreen extends StatefulWidget {
   final bool isBangla;
   final VoidCallback? onToggleLanguage;
@@ -121,7 +105,7 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
 
   final TextEditingController _budgetController = TextEditingController();
 
-  SystemType _selectedSystemType = SystemType.onGrid;
+  SolarSystemType _selectedSystemType = SolarSystemType.gridTied;
   double _costPerWatt = 75.0;
 
   final double _selectedModuleEfficiency = 0.215;
@@ -130,8 +114,8 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
   bool _isLoadingNasa = false;
   SolarRadiationResult? _climateData;
 
-  final double _latitude = 23.8103;
-  final double _longitude = 90.4125;
+  static const double _defaultLat = 23.8103;
+  static const double _defaultLon = 90.4125;
 
   @override
   void initState() {
@@ -169,23 +153,26 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     _fetchLocationClimateData();
   }
 
-  double _getDefaultRateForType(SystemType type, {required bool isBangla}) {
+  double _getDefaultRateForType(
+    SolarSystemType type, {
+    required bool isBangla,
+  }) {
     if (isBangla) {
       switch (type) {
-        case SystemType.onGrid:
+        case SolarSystemType.gridTied:
           return 75.0;
-        case SystemType.hybrid:
+        case SolarSystemType.hybrid:
           return 105.0;
-        case SystemType.offGrid:
+        case SolarSystemType.offGrid:
           return 120.0;
       }
     } else {
       switch (type) {
-        case SystemType.onGrid:
+        case SolarSystemType.gridTied:
           return 0.65;
-        case SystemType.hybrid:
+        case SolarSystemType.hybrid:
           return 0.90;
-        case SystemType.offGrid:
+        case SolarSystemType.offGrid:
           return 1.05;
       }
     }
@@ -195,7 +182,7 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     setState(() {
       _isBangla = !_isBangla;
       final double currentBudget =
-          double.tryParse(_budgetController.text) ?? 0.0;
+          double.tryParse(_budgetController.text.replaceAll(',', '')) ?? 0.0;
       if (_isBangla) {
         _budgetController.text = (currentBudget * _usdToBdtRate)
             .toStringAsFixed(0);
@@ -219,8 +206,8 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     setState(() => _isLoadingNasa = true);
     try {
       final result = await SolarRadiationService.fetchPshByCoordinates(
-        _latitude,
-        _longitude,
+        _defaultLat,
+        _defaultLon,
       );
       if (mounted) setState(() => _climateData = result);
     } catch (_) {
@@ -239,29 +226,14 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     }
   }
 
-  double _calculateDynamicPackingFactor(double latitude) {
-    final double absLat = latitude.abs();
-    if (absLat <= 15.0) return 0.75;
-    if (absLat <= 25.0) return 0.75 - ((absLat - 15.0) / 10.0) * 0.07;
-    if (absLat <= 35.0) return 0.68 - ((absLat - 25.0) / 10.0) * 0.08;
-    return 0.58;
-  }
-
-  double _calculateTempDerateFactor(double ambientTemp) {
-    const double noct = 45.0;
-    const double tempCoeff = 0.0035;
-    final double cellTemp = ambientTemp + (noct - 20.0);
-    if (cellTemp <= 25.0) return 1.0;
-    final double loss = (cellTemp - 25.0) * tempCoeff;
-    return (1.0 - loss).clamp(0.75, 1.0);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final String currencySymbol = _isBangla ? '৳' : '\$';
-    final double totalBudget = double.tryParse(_budgetController.text) ?? 0.0;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ১. বাজেট থেকে ইনস্টলযোগ্য ক্ষমতা (kWp)
+    final String currencySymbol = _isBangla ? '৳' : '\$';
+    final double totalBudget =
+        double.tryParse(_budgetController.text.replaceAll(',', '')) ?? 0.0;
+
     final double installableCapacityKwp = (_costPerWatt > 0 && totalBudget > 0)
         ? (totalBudget / _costPerWatt) / 1000.0
         : 0.0;
@@ -270,12 +242,13 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
         ? ((installableCapacityKwp * 1000) / _selectedModuleWatt).floor()
         : 0;
 
-    // ২. সৌর বিকিরণ ও উৎপাদন হিসাব (সম্পূর্ণ নাল-সেফ)
     final double psh =
         _climateData?.peakSunHours ?? SolarRadiationService.defaultPsh;
     final double ambTemp = _climateData?.ambientTemp ?? 26.0;
-    final double tempDerate = _calculateTempDerateFactor(ambTemp);
-    final double basePR = _selectedSystemType == SystemType.onGrid
+    final double tempDerate = SolarCalculationService.calculateTempDerateFactor(
+      ambTemp,
+    );
+    final double basePR = _selectedSystemType == SolarSystemType.gridTied
         ? 0.80
         : 0.72;
     final double effectivePR = basePR * tempDerate;
@@ -285,37 +258,26 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     final double monthlyGenerationKwh = dailyGenerationKwh * 30;
     final double annualGenerationKwh = dailyGenerationKwh * 365;
 
-    // ৩. প্রয়োজনীয় নেট জায়গা
-    final double dynamicPF = _calculateDynamicPackingFactor(_latitude);
+    final double dynamicPF =
+        SolarCalculationService.calculateDynamicPackingFactor(_defaultLat);
     final double netAreaSqM = installableCapacityKwp > 0
         ? (installableCapacityKwp / (_selectedModuleEfficiency * dynamicPF))
         : 0.0;
     final double netAreaSqFt = netAreaSqM * 10.7639;
 
-    // ৪. আর্থিক সাশ্রয় ও পে-ব্যাক সময়কাল
     final double electricityTariff = _isBangla ? 9.50 : 0.12;
     final double annualSavings = annualGenerationKwh * electricityTariff;
     final double paybackYears = annualSavings > 0
         ? (totalBudget / annualSavings)
         : 0.0;
 
-    // ৫. পরিবেশগত প্রভাব
     final double co2OffsetKg = annualGenerationKwh * 0.62;
     final int equivalentTrees = (co2OffsetKg / 20.0).round();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           _isBangla ? 'বাজেটভিত্তিক সোলার সাইজিং' : 'Budget-Based Solar Sizing',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16.5,
-            fontWeight: FontWeight.bold,
-          ),
         ),
         actions: [
           IconButton(
@@ -323,13 +285,13 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
             icon: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+                color: Theme.of(context).dividerColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 _isBangla ? 'ENG (\$)' : 'বাংলা (৳)',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -338,100 +300,116 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildClimateHeader(psh, ambTemp),
-            const SizedBox(height: 14),
-
-            _buildBudgetInputCard(currencySymbol),
-            const SizedBox(height: 14),
-
-            _buildRateAndTypeCard(currencySymbol),
-            const SizedBox(height: 18),
-
-            Text(
-              _isBangla
-                  ? 'বাজেট অনুযায়ী সম্ভাব্য সিস্টেম'
-                  : 'Affordable Solar System',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? [AppColors.darkBgTop, AppColors.darkBgBottom]
+                : [AppColors.lightBgTop, AppColors.lightBgBottom],
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildClimateHeader(psh, ambTemp, isDark),
+              const SizedBox(height: 14),
+              _buildBudgetInputCard(currencySymbol, isDark),
+              const SizedBox(height: 14),
+              _buildRateAndTypeCard(currencySymbol, isDark),
+              const SizedBox(height: 18),
+              Text(
+                _isBangla
+                    ? 'বাজেট অনুযায়ী সম্ভাব্য সিস্টেম'
+                    : 'Affordable Solar System',
+                style: TextStyle(
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              children: [
-                _buildResultStatCard(
-                  title: _isBangla ? 'ইনস্টলযোগ্য ক্ষমতা' : 'System Capacity',
-                  value: '${installableCapacityKwp.toStringAsFixed(2)} kWp',
-                  subtitle: _isBangla
-                      ? 'প্যানেল: $totalPanels টি ($_selectedModuleWatt W)'
-                      : 'Panels: $totalPanels pcs ($_selectedModuleWatt W)',
-                  icon: Icons.flash_on_rounded,
-                  color: Colors.greenAccent,
-                ),
-                const SizedBox(width: 10),
-                _buildResultStatCard(
-                  title: _isBangla ? 'প্রয়োজনীয় ছাদ/জমি' : 'Required Area',
-                  value: '${netAreaSqFt.toStringAsFixed(0)} sq.ft',
-                  subtitle: '≈ ${netAreaSqM.toStringAsFixed(1)} m²',
-                  icon: Icons.roofing_rounded,
-                  color: Colors.cyanAccent,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              children: [
-                _buildResultStatCard(
-                  title: _isBangla ? 'দৈনিক উৎপাদন' : 'Daily Output',
-                  value: '${dailyGenerationKwh.toStringAsFixed(1)} kWh',
-                  subtitle: _isBangla
-                      ? 'মাসিক: ${monthlyGenerationKwh.toStringAsFixed(0)} ইউনিট'
-                      : 'Monthly: ${monthlyGenerationKwh.toStringAsFixed(0)} Units',
-                  icon: Icons.wb_sunny_rounded,
-                  color: Colors.amberAccent,
-                ),
-                const SizedBox(width: 10),
-                _buildResultStatCard(
-                  title: _isBangla
-                      ? 'বিনিয়োগ ফেরত (Payback)'
-                      : 'Est. Payback Time',
-                  value: paybackYears > 0
-                      ? '${paybackYears.toStringAsFixed(1)} ${_isBangla ? "বছর" : "Years"}'
-                      : 'N/A',
-                  subtitle: _isBangla
-                      ? 'বাৎসরিক সাশ্রয়: ${CurrencyFormatter.format(annualSavings, _isBangla)}'
-                      : 'Annual Savings: ${CurrencyFormatter.format(annualSavings, _isBangla)}',
-                  icon: Icons.savings_rounded,
-                  color: Colors.tealAccent,
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            if (paybackYears > 0 && paybackYears <= 25)
-              _buildPaybackTimelineCard(paybackYears),
-            const SizedBox(height: 14),
-
-            _buildCostBreakdownCard(totalBudget, currencySymbol),
-            const SizedBox(height: 14),
-
-            _buildEnvironmentalImpactCard(co2OffsetKg, equivalentTrees),
-          ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _buildResultStatCard(
+                    title: _isBangla ? 'ইনস্টলযোগ্য ক্ষমতা' : 'System Capacity',
+                    value: '${installableCapacityKwp.toStringAsFixed(2)} kWp',
+                    subtitle: _isBangla
+                        ? 'প্যানেল: $totalPanels টি ($_selectedModuleWatt W)'
+                        : 'Panels: $totalPanels pcs ($_selectedModuleWatt W)',
+                    icon: Icons.flash_on_rounded,
+                    color: isDark
+                        ? AppColors.accentCyan
+                        : const Color(0xFF0284C7),
+                    isDark: isDark,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildResultStatCard(
+                    title: _isBangla ? 'প্রয়োজনীয় ছাদ/জমি' : 'Required Area',
+                    value: '${netAreaSqFt.toStringAsFixed(0)} sq.ft',
+                    subtitle: '≈ ${netAreaSqM.toStringAsFixed(1)} m²',
+                    icon: Icons.roofing_rounded,
+                    color: isDark
+                        ? AppColors.energyGreen
+                        : const Color(0xFF059669),
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _buildResultStatCard(
+                    title: _isBangla ? 'দৈনিক উৎপাদন' : 'Daily Output',
+                    value: '${dailyGenerationKwh.toStringAsFixed(1)} kWh',
+                    subtitle: _isBangla
+                        ? 'মাসিক: ${monthlyGenerationKwh.toStringAsFixed(0)} ইউনিট'
+                        : 'Monthly: ${monthlyGenerationKwh.toStringAsFixed(0)} Units',
+                    icon: Icons.wb_sunny_rounded,
+                    color: AppColors.solarGold,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildResultStatCard(
+                    title: _isBangla
+                        ? 'বিনিয়োগ ফেরত (Payback)'
+                        : 'Est. Payback Time',
+                    value: paybackYears > 0
+                        ? '${paybackYears.toStringAsFixed(1)} ${_isBangla ? "বছর" : "Years"}'
+                        : 'N/A',
+                    subtitle: _isBangla
+                        ? 'বাৎসরিক সাশ্রয়: ${CurrencyFormatter.format(annualSavings, _isBangla)}'
+                        : 'Annual Savings: ${CurrencyFormatter.format(annualSavings, _isBangla)}',
+                    icon: Icons.savings_rounded,
+                    color: isDark ? Colors.tealAccent : const Color(0xFF0D9488),
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (paybackYears > 0 && paybackYears <= 25)
+                _buildPaybackTimelineCard(paybackYears, isDark),
+              const SizedBox(height: 14),
+              _buildCostBreakdownCard(totalBudget, isDark),
+              const SizedBox(height: 14),
+              _buildEnvironmentalImpactCard(
+                co2OffsetKg,
+                equivalentTrees,
+                isDark,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // 📍 ক্লাইমেট ও লাইভ রেট হেডার
-  Widget _buildClimateHeader(double psh, double ambTemp) {
+  Widget _buildClimateHeader(double psh, double ambTemp, bool isDark) {
     final String locationText =
         (_climateData != null && _climateData!.placeName.isNotEmpty)
         ? '📍 ${_climateData!.placeName}'
@@ -440,15 +418,17 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.satellite_alt_rounded,
-            color: Colors.cyanAccent,
+            color: isDark ? AppColors.accentCyan : const Color(0xFF0284C7),
             size: 20,
           ),
           const SizedBox(width: 10),
@@ -463,8 +443,10 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                         locationText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
                         ),
@@ -477,15 +459,21 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.cyanAccent.withValues(alpha: 0.12),
+                        color:
+                            (isDark
+                                    ? AppColors.accentCyan
+                                    : AppColors.energyGreen)
+                                .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         _isLoadingRate
                             ? 'Syncing...'
                             : '1 USD ≈ ${_usdToBdtRate.toStringAsFixed(1)} BDT',
-                        style: const TextStyle(
-                          color: Colors.cyanAccent,
+                        style: TextStyle(
+                          color: isDark
+                              ? AppColors.accentCyan
+                              : AppColors.energyGreen,
                           fontSize: 9.5,
                           fontWeight: FontWeight.bold,
                         ),
@@ -497,25 +485,32 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                   _isBangla
                       ? 'PSH: ${psh.toStringAsFixed(2)} ঘণ্টা | গড় তাপমাত্রা: ${ambTemp.toStringAsFixed(1)}°C'
                       : 'PSH: ${psh.toStringAsFixed(2)} hrs | Avg Temp: ${ambTemp.toStringAsFixed(1)}°C',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
           ),
           if (_isLoadingNasa)
-            const SizedBox(
+            SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.cyanAccent,
+                color: isDark ? AppColors.accentCyan : AppColors.energyGreen,
               ),
             )
           else
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.refresh_rounded,
-                color: Colors.white54,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.lightTextSecondary,
                 size: 18,
               ),
               onPressed: _fetchDynamicRateAndData,
@@ -526,18 +521,20 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     );
   }
 
-  // 💰 বাজেট ইনপুট কার্ড
-  Widget _buildBudgetInputCard(String currencySymbol) {
-    final double currentVal = double.tryParse(_budgetController.text) ?? 0.0;
+  Widget _buildBudgetInputCard(String currencySymbol, bool isDark) {
+    final double currentVal =
+        double.tryParse(_budgetController.text.replaceAll(',', '')) ?? 0.0;
     final double maxSliderVal = _isBangla ? 2500000.0 : 20000.0;
     final double minSliderVal = _isBangla ? 30000.0 : 300.0;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -547,8 +544,10 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
             children: [
               Text(
                 _isBangla ? 'আপনার মোট বাজেট' : 'Total Investment Budget',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -556,13 +555,13 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.greenAccent.withValues(alpha: 0.12),
+                  color: AppColors.energyGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   CurrencyFormatter.format(currentVal, _isBangla),
                   style: const TextStyle(
-                    color: Colors.greenAccent,
+                    color: AppColors.energyGreen,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -577,15 +576,17 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
             ],
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: isDark ? Colors.white : AppColors.lightTextPrimary,
               fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFF0F172A),
+              fillColor: isDark
+                  ? AppColors.darkInputBg
+                  : AppColors.lightInputBg,
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 14, right: 8),
                 child: Center(
@@ -593,7 +594,7 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                   child: Text(
                     currencySymbol,
                     style: const TextStyle(
-                      color: Colors.greenAccent,
+                      color: AppColors.energyGreen,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
@@ -602,7 +603,15 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                borderSide: BorderSide(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
@@ -613,9 +622,9 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
           const SizedBox(height: 10),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: Colors.greenAccent,
-              inactiveTrackColor: Colors.white12,
-              thumbColor: Colors.greenAccent,
+              activeTrackColor: AppColors.energyGreen,
+              inactiveTrackColor: isDark ? Colors.white12 : Colors.black12,
+              thumbColor: AppColors.energyGreen,
               trackHeight: 4,
             ),
             child: Slider(
@@ -629,42 +638,23 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  CurrencyFormatter.format(minSliderVal, _isBangla),
-                  style: const TextStyle(color: Colors.white38, fontSize: 9.5),
-                ),
-                Text(
-                  CurrencyFormatter.format(maxSliderVal / 2, _isBangla),
-                  style: const TextStyle(color: Colors.white38, fontSize: 9.5),
-                ),
-                Text(
-                  CurrencyFormatter.format(maxSliderVal, _isBangla),
-                  style: const TextStyle(color: Colors.white38, fontSize: 9.5),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 
-  // 🏷️ বাজারদর ও সিস্টেম টাইপ কার্ড
-  Widget _buildRateAndTypeCard(String currencySymbol) {
+  Widget _buildRateAndTypeCard(String currencySymbol, bool isDark) {
     final double minRate = _isBangla ? 50.0 : 0.40;
     final double maxRate = _isBangla ? 160.0 : 1.50;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -673,8 +663,10 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
             _isBangla
                 ? 'সিস্টেমের ধরন ও বাজারদর'
                 : 'System Architecture & Market Rate',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.lightTextPrimary,
               fontSize: 13,
               fontWeight: FontWeight.bold,
             ),
@@ -683,18 +675,21 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
           Row(
             children: [
               _buildTypeRadio(
-                SystemType.onGrid,
+                SolarSystemType.gridTied,
                 _isBangla ? 'অন-গ্রিড' : 'On-Grid',
+                isDark,
               ),
               const SizedBox(width: 8),
               _buildTypeRadio(
-                SystemType.hybrid,
+                SolarSystemType.hybrid,
                 _isBangla ? 'হাইব্রিড' : 'Hybrid',
+                isDark,
               ),
               const SizedBox(width: 8),
               _buildTypeRadio(
-                SystemType.offGrid,
+                SolarSystemType.offGrid,
                 _isBangla ? 'অফ-গ্রিড' : 'Off-Grid',
+                isDark,
               ),
             ],
           ),
@@ -706,14 +701,21 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                 _isBangla
                     ? 'প্রতি ওয়াট সিস্টেম খরচ'
                     : 'Estimated Cost per Watt',
-                style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                style: TextStyle(
+                  color: isDark
+                      ? AppColors.darkTextSecondary
+                      : AppColors.lightTextSecondary,
+                  fontSize: 11.5,
+                ),
               ),
               Text(
                 _isBangla
                     ? '${CurrencyFormatter.formatBdt(_costPerWatt)} / W'
                     : '${CurrencyFormatter.formatUsd(_costPerWatt, decimals: 2)} / W',
-                style: const TextStyle(
-                  color: Colors.cyanAccent,
+                style: TextStyle(
+                  color: isDark
+                      ? AppColors.accentCyan
+                      : const Color(0xFF0284C7),
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -722,9 +724,13 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
           ),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: Colors.cyanAccent,
-              inactiveTrackColor: Colors.white12,
-              thumbColor: Colors.cyanAccent,
+              activeTrackColor: isDark
+                  ? AppColors.accentCyan
+                  : const Color(0xFF0284C7),
+              inactiveTrackColor: isDark ? Colors.white12 : Colors.black12,
+              thumbColor: isDark
+                  ? AppColors.accentCyan
+                  : const Color(0xFF0284C7),
               trackHeight: 3,
             ),
             child: Slider(
@@ -739,17 +745,18 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     );
   }
 
-  // ⏱️ ২৫ বছরের রিটার্ন টাইমলাইন
-  Widget _buildPaybackTimelineCard(double paybackYears) {
+  Widget _buildPaybackTimelineCard(double paybackYears, bool isDark) {
     final double paybackRatio = (paybackYears / 25.0).clamp(0.05, 0.95);
     final double freeYears = 25.0 - paybackYears;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,8 +768,10 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                 _isBangla
                     ? '২৫ বছরের রিটার্ন টাইমলাইন'
                     : '25-Year Lifecycle Return',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
                   fontSize: 12.5,
                   fontWeight: FontWeight.bold,
                 ),
@@ -772,7 +781,7 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                     ? '${freeYears.toStringAsFixed(1)} বছর বিনামূল্যে বিদ্যুৎ'
                     : '${freeYears.toStringAsFixed(1)} Yrs Free Power',
                 style: const TextStyle(
-                  color: Colors.greenAccent,
+                  color: AppColors.energyGreen,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -792,7 +801,7 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                   ),
                   Expanded(
                     flex: ((1.0 - paybackRatio) * 100).round(),
-                    child: Container(color: Colors.greenAccent),
+                    child: Container(color: AppColors.energyGreen),
                   ),
                 ],
               ),
@@ -813,7 +822,10 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
               ),
               Text(
                 _isBangla ? 'মোট আয়ুষ্কাল: ২৫ বছর' : 'Total Lifecycle: 25 yrs',
-                style: const TextStyle(color: Colors.white38, fontSize: 10),
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 10,
+                ),
               ),
             ],
           ),
@@ -822,25 +834,25 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     );
   }
 
-  // 📊 খরচের উপাদানভিত্তিক বিভাজন
-  Widget _buildCostBreakdownCard(double totalBudget, String currencySymbol) {
+  Widget _buildCostBreakdownCard(double totalBudget, bool isDark) {
     final double panelCost =
-        totalBudget * (_selectedSystemType == SystemType.onGrid ? 0.48 : 0.38);
+        totalBudget *
+        (_selectedSystemType == SolarSystemType.gridTied ? 0.48 : 0.38);
     final double inverterCost = totalBudget * 0.22;
-    final double batteryCost = _selectedSystemType == SystemType.onGrid
+    final double batteryCost = _selectedSystemType == SolarSystemType.gridTied
         ? 0.0
         : totalBudget * 0.25;
     final double structureAndBosCost =
         totalBudget - (panelCost + inverterCost + batteryCost);
 
-    final double safeBudget = totalBudget <= 0 ? 1.0 : totalBudget;
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -849,47 +861,12 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
             _isBangla
                 ? 'বাজেট খরচের আনুমানিক বিভাজন'
                 : 'Estimated Cost Distribution',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.lightTextPrimary,
               fontSize: 12.5,
               fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 8,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: math.max(1, (panelCost * 100 / safeBudget).round()),
-                    child: Container(color: Colors.amberAccent),
-                  ),
-                  Expanded(
-                    flex: math.max(
-                      1,
-                      (inverterCost * 100 / safeBudget).round(),
-                    ),
-                    child: Container(color: Colors.cyanAccent),
-                  ),
-                  if (_selectedSystemType != SystemType.onGrid)
-                    Expanded(
-                      flex: math.max(
-                        1,
-                        (batteryCost * 100 / safeBudget).round(),
-                      ),
-                      child: Container(color: Colors.purpleAccent),
-                    ),
-                  Expanded(
-                    flex: math.max(
-                      1,
-                      (structureAndBosCost * 100 / safeBudget).round(),
-                    ),
-                    child: Container(color: Colors.tealAccent),
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -897,17 +874,20 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
             _isBangla ? 'সোলার প্যানেল' : 'Solar Modules',
             panelCost,
             Colors.amberAccent,
+            isDark,
           ),
           _buildBreakdownRow(
             _isBangla ? 'ইনভার্টার ও প্রটেকশন' : 'Inverter & Protection',
             inverterCost,
             Colors.cyanAccent,
+            isDark,
           ),
-          if (_selectedSystemType != SystemType.onGrid)
+          if (_selectedSystemType != SolarSystemType.gridTied)
             _buildBreakdownRow(
               _isBangla ? 'ব্যাটারি ব্যাংক' : 'Battery Bank',
               batteryCost,
               Colors.purpleAccent,
+              isDark,
             ),
           _buildBreakdownRow(
             _isBangla
@@ -915,13 +895,19 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                 : 'Mounting, BOS & Labor',
             structureAndBosCost,
             Colors.tealAccent,
+            isDark,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBreakdownRow(String label, double amount, Color color) {
+  Widget _buildBreakdownRow(
+    String label,
+    double amount,
+    Color color,
+    bool isDark,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -937,14 +923,19 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : AppColors.lightTextSecondary,
+                  fontSize: 11,
+                ),
               ),
             ],
           ),
           Text(
             CurrencyFormatter.format(amount, _isBangla),
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.lightTextPrimary,
               fontSize: 11.5,
               fontWeight: FontWeight.bold,
             ),
@@ -954,26 +945,27 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     );
   }
 
-  // 🌿 পরিবেশগত প্রভাব কার্ড
-  Widget _buildEnvironmentalImpactCard(double co2Kg, int trees) {
+  Widget _buildEnvironmentalImpactCard(double co2Kg, int trees, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.greenAccent.withValues(alpha: 0.08),
+        color: AppColors.energyGreen.withValues(alpha: isDark ? 0.08 : 0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: AppColors.energyGreen.withValues(alpha: isDark ? 0.2 : 0.4),
+        ),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.greenAccent.withValues(alpha: 0.15),
+              color: AppColors.energyGreen.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.eco_rounded,
-              color: Colors.greenAccent,
+              color: AppColors.energyGreen,
               size: 22,
             ),
           ),
@@ -987,7 +979,7 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                       ? 'পরিবেশগত অবদান (বাৎসরিক)'
                       : 'Annual Environmental Impact',
                   style: const TextStyle(
-                    color: Colors.greenAccent,
+                    color: AppColors.energyGreen,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -996,8 +988,13 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                 Text(
                   _isBangla
                       ? 'কার্বন হ্রাস: ${co2Kg.toStringAsFixed(0)} kg CO₂ | $trees টি বৃক্ষরোপণের সমতুল্য'
-                      : 'CO₂ Offset: ${co2Kg.toStringAsFixed(0)} kg CO₂ | Equivalent to planting $trees trees',
-                  style: const TextStyle(color: Colors.white70, fontSize: 10.5),
+                      : 'CO₂ Offset: ${co2Kg.toStringAsFixed(0)} kg CO₂ | Planting $trees trees',
+                  style: TextStyle(
+                    color: isDark
+                        ? Colors.white70
+                        : AppColors.lightTextSecondary,
+                    fontSize: 10.5,
+                  ),
                 ),
               ],
             ),
@@ -1007,8 +1004,12 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     );
   }
 
-  Widget _buildTypeRadio(SystemType type, String title) {
+  Widget _buildTypeRadio(SolarSystemType type, String title, bool isDark) {
     final bool isSelected = _selectedSystemType == type;
+    final Color activeColor = isDark
+        ? AppColors.accentCyan
+        : AppColors.energyGreen;
+
     return Expanded(
       child: InkWell(
         onTap: () {
@@ -1022,18 +1023,22 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? Colors.cyanAccent.withValues(alpha: 0.15)
-                : const Color(0xFF0F172A),
+                ? activeColor.withValues(alpha: 0.15)
+                : (isDark ? AppColors.darkInputBg : AppColors.lightInputBg),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? Colors.cyanAccent : Colors.white12,
+              color: isSelected
+                  ? activeColor
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
             ),
           ),
           child: Center(
             child: Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.cyanAccent : Colors.white70,
+                color: isSelected
+                    ? activeColor
+                    : (isDark ? Colors.white70 : AppColors.lightTextSecondary),
                 fontSize: 11.5,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -1050,14 +1055,17 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
     required String subtitle,
     required IconData icon,
     required Color color,
+    required bool isDark,
   }) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
+          color: isDark ? AppColors.darkInputBg : AppColors.lightCardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1071,7 +1079,12 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
@@ -1090,7 +1103,10 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white38, fontSize: 10),
+              style: TextStyle(
+                color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                fontSize: 10,
+              ),
             ),
           ],
         ),

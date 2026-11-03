@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_colors.dart';
 import '../models/appliance_item.dart';
 import '../models/appliance_presets.dart';
+import '../widgets/theme_toggle_button.dart';
 
 class ApplianceInputScreen extends StatefulWidget {
   final CategoryConfig category;
@@ -71,346 +73,450 @@ class _ApplianceInputScreenState extends State<ApplianceInputScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final title = widget.isBangla
         ? widget.category.titleBn
         : widget.category.titleEn;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7F6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B6A3B),
-        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context, _currentItems),
         ),
         title: Row(
           children: [
             Image.asset(
               widget.category.svgPath,
-              width: 24,
-              height: 24,
+              width: 22,
+              height: 22,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.devices, color: Colors.white, size: 22),
+              errorBuilder: (context, error, stackTrace) => Icon(
+                Icons.devices,
+                color: isDark ? AppColors.accentCyan : AppColors.energyGreen,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 10),
-            Text(
-              widget.isBangla ? '$title ইনপুট' : '$title Input',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+            Expanded(
+              child: Text(
+                widget.isBangla ? '$title ইনপুট' : '$title Input',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
+        actions: [
+          // ☀️/🌙 স্ট্যান্ডার্ডাইজড থিম টগল বাটন
+          ThemeToggleButton(isBangla: widget.isBangla),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _currentItems.length,
-              itemBuilder: (context, index) {
-                return _buildItemCard(index);
-              },
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? [AppColors.darkBgTop, AppColors.darkBgBottom]
+                : [AppColors.lightBgTop, AppColors.lightBgBottom],
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _currentItems.length,
+                itemBuilder: (context, index) {
+                  return _buildItemCard(index, isDark);
+                },
+              ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            OutlinedButton.icon(
-              onPressed: _addNewItem,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF1B6A3B),
-                side: const BorderSide(color: Color(0xFF1B6A3B), width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              OutlinedButton.icon(
+                onPressed: _addNewItem,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark
+                      ? AppColors.accentCyan
+                      : const Color(0xFF1B6A3B),
+                  side: BorderSide(
+                    color: isDark
+                        ? AppColors.accentCyan
+                        : const Color(0xFF1B6A3B),
+                    width: 1.5,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.add_circle_outline),
+                label: Text(
+                  widget.isBangla
+                      ? '+ আরও উপকরণ যোগ করুন'
+                      : '+ Add Another Item',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
               ),
-              icon: const Icon(Icons.add_circle_outline),
-              label: Text(
-                widget.isBangla ? '+ আরও উপকরণ যোগ করুন' : '+ Add Another Item',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 20),
-            _buildGuidelineCard(),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
+              _buildGuidelineCard(isDark),
+              const SizedBox(height: 20),
 
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context, _currentItems);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B6A3B),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context, _currentItems);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark
+                      ? AppColors.energyGreen
+                      : const Color(0xFF1B6A3B),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 2,
                 ),
-                elevation: 3,
-              ),
-              child: Text(
-                widget.isBangla ? 'সংরক্ষণ করুন ও ফিরুন' : 'Save & Return',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                child: Text(
+                  widget.isBangla ? 'সংরক্ষণ করুন ও ফিরুন' : 'Save & Return',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildItemCard(int index) {
+  Widget _buildItemCard(int index, bool isDark) {
     final item = _currentItems[index];
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // হেডার: প্রিসেট নির্বাচন এবং ডিলিট বাটন
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: widget.isBangla ? item.nameBn : item.nameEn,
-                    decoration: InputDecoration(
-                      labelText: widget.isBangla
-                          ? 'আইটেম নির্বাচন'
-                          : 'Select Item',
-                      labelStyle: const TextStyle(fontSize: 13),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    items: widget.category.presets.map((preset) {
-                      final pName = widget.isBangla
-                          ? preset.nameBn
-                          : preset.nameEn;
-                      return DropdownMenuItem<String>(
-                        value: pName,
-                        child: Text(
-                          pName,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val == null) return;
-                      final selectedPreset = widget.category.presets.firstWhere(
-                        (p) => (widget.isBangla ? p.nameBn : p.nameEn) == val,
-                      );
-                      setState(() {
-                        item.nameBn = selectedPreset.nameBn;
-                        item.nameEn = selectedPreset.nameEn;
-                        item.watt = selectedPreset.defaultWatt;
-                        item.isAC = selectedPreset.defaultIsAC;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(
-                    Icons.cancel,
-                    color: Colors.redAccent,
-                    size: 28,
-                  ),
-                  tooltip: widget.isBangla ? 'মুছুন' : 'Delete',
-                  onPressed: () => _removeItem(index),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // ইনপুট রো: উৎস (AC/DC) এবং ওয়াট (Watt)
-            Row(
-              children: [
-                // উৎস (AC/DC)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.isBangla ? 'উৎস (Source)' : 'Source',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          ChoiceChip(
-                            label: const Text('AC'),
-                            selected: item.isAC,
-                            selectedColor: Colors.blue.shade100,
-                            onSelected: (selected) {
-                              if (selected) setState(() => item.isAC = true);
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                          ChoiceChip(
-                            label: const Text('DC'),
-                            selected: !item.isAC,
-                            selectedColor: Colors.green.shade100,
-                            onSelected: (selected) {
-                              if (selected) setState(() => item.isAC = false);
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // ওয়াট (Drag / Type)
-                Expanded(
-                  child: DragSpinInputField(
-                    label: widget.isBangla ? 'ওয়াট (W)' : 'Power (W)',
-                    value: item.watt,
-                    step: 5.0,
-                    min: 1.0,
-                    max: 5000.0,
-                    isDecimal: false,
-                    onChanged: (val) {
-                      setState(() {
-                        item.watt = val;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // ইনপুট রো: পরিমাণ এবং দৈনিক ব্যবহার
-            Row(
-              children: [
-                // পরিমাণ (Drag / Type)
-                Expanded(
-                  child: DragSpinInputField(
-                    label: widget.isBangla ? 'পরিমাণ (সংখ্যা)' : 'Quantity',
-                    value: item.quantity.toDouble(),
-                    step: 1.0,
-                    min: 1.0,
-                    max: 100.0,
-                    isDecimal: false,
-                    onChanged: (val) {
-                      setState(() {
-                        item.quantity = val.toInt();
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // দৈনিক ব্যবহার (Drag / Type)
-                Expanded(
-                  child: DragSpinInputField(
-                    label: widget.isBangla
-                        ? 'দৈনিক ব্যবহার (ঘণ্টা)'
-                        : 'Usage (Hours)',
-                    value: item.hoursPerDay,
-                    step: 0.5,
-                    min: 0.1,
-                    max: 24.0,
-                    isDecimal: true,
-                    onChanged: (val) {
-                      setState(() {
-                        item.hoursPerDay = val;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGuidelineCard() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14.0),
       decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.blueGrey.shade200),
+        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.info_outline,
-                size: 18,
-                color: Color(0xFF1B6A3B),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: widget.isBangla ? item.nameBn : item.nameEn,
+                  dropdownColor: isDark
+                      ? AppColors.darkInputBg
+                      : AppColors.lightCardBg,
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                    fontSize: 14,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: widget.isBangla
+                        ? 'আইটেম নির্বাচন'
+                        : 'Select Item',
+                    labelStyle: TextStyle(
+                      fontSize: 13,
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                    ),
+                    filled: true,
+                    fillColor: isDark
+                        ? AppColors.darkInputBg
+                        : AppColors.lightInputBg,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
+                      ),
+                    ),
+                  ),
+                  items: widget.category.presets.map((preset) {
+                    final pName = widget.isBangla
+                        ? preset.nameBn
+                        : preset.nameEn;
+                    return DropdownMenuItem<String>(
+                      value: pName,
+                      child: Text(
+                        pName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val == null) return;
+                    final selectedPreset = widget.category.presets.firstWhere(
+                      (p) => (widget.isBangla ? p.nameBn : p.nameEn) == val,
+                    );
+                    setState(() {
+                      item.nameBn = selectedPreset.nameBn;
+                      item.nameEn = selectedPreset.nameEn;
+                      item.watt = selectedPreset.defaultWatt;
+                      item.isAC = selectedPreset.defaultIsAC;
+                    });
+                  },
+                ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                widget.isBangla
-                    ? 'ব্যবহার নির্দেশিকা ও টিপস'
-                    : 'Usage Guide & Tips',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: Color(0xFF1B6A3B),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(
+                  Icons.cancel,
+                  color: AppColors.alertRed,
+                  size: 26,
+                ),
+                tooltip: widget.isBangla ? 'মুছুন' : 'Delete',
+                onPressed: () => _removeItem(index),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.isBangla ? 'উৎস (Source)' : 'Source',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('AC'),
+                          selected: item.isAC,
+                          selectedColor: isDark
+                              ? AppColors.accentCyan.withValues(alpha: 0.25)
+                              : Colors.blue.shade100,
+                          labelStyle: TextStyle(
+                            color: item.isAC
+                                ? (isDark
+                                      ? AppColors.accentCyan
+                                      : Colors.blue.shade900)
+                                : (isDark ? Colors.white60 : Colors.black87),
+                            fontWeight: item.isAC
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                          onSelected: (selected) {
+                            if (selected) setState(() => item.isAC = true);
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('DC'),
+                          selected: !item.isAC,
+                          selectedColor: isDark
+                              ? AppColors.energyGreen.withValues(alpha: 0.25)
+                              : Colors.green.shade100,
+                          labelStyle: TextStyle(
+                            color: !item.isAC
+                                ? (isDark
+                                      ? AppColors.energyGreen
+                                      : Colors.green.shade900)
+                                : (isDark ? Colors.white60 : Colors.black87),
+                            fontWeight: !item.isAC
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                          onSelected: (selected) {
+                            if (selected) setState(() => item.isAC = false);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: DragSpinInputField(
+                  label: widget.isBangla ? 'ওয়াট (W)' : 'Power (W)',
+                  value: item.watt,
+                  step: 5.0,
+                  min: 1.0,
+                  max: 5000.0,
+                  isDecimal: false,
+                  isDark: isDark,
+                  onChanged: (val) {
+                    setState(() {
+                      item.watt = val;
+                    });
+                  },
                 ),
               ),
             ],
           ),
-          const Divider(height: 16),
-          _buildGuideRow(
-            widget.isBangla ? 'ইনপুট টিপস' : 'Input Tip',
-            widget.isBangla
-                ? 'মান টাইপ করতে পারেন, অথবা বক্সে চাপ দিয়ে ধরে ওপরে/নিচে টেনে (Drag) সহজেই বাড়াতে-কমাতে পারেন।'
-                : 'Type directly or drag up/down on the box to increase or decrease values.',
-          ),
-          _buildGuideRow(
-            widget.isBangla ? 'উৎস' : 'Source',
-            widget.isBangla
-                ? 'বিদ্যুতের ধরন নির্বাচন করুন (এসি অথবা ডিসি)।'
-                : 'Select current type used for item (AC or DC).',
-          ),
-          _buildGuideRow(
-            widget.isBangla ? 'ব্যবহার' : 'Usage',
-            widget.isBangla
-                ? 'যন্ত্রটি দিনে গড়ে কত ঘণ্টা চালানো হয়।'
-                : 'Average hours the appliance runs per day.',
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: DragSpinInputField(
+                  label: widget.isBangla ? 'পরিমাণ (সংখ্যা)' : 'Quantity',
+                  value: item.quantity.toDouble(),
+                  step: 1.0,
+                  min: 1.0,
+                  max: 100.0,
+                  isDecimal: false,
+                  isDark: isDark,
+                  onChanged: (val) {
+                    setState(() {
+                      item.quantity = val.toInt();
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DragSpinInputField(
+                  label: widget.isBangla
+                      ? 'দৈনিক ব্যবহার (ঘণ্টা)'
+                      : 'Usage (Hours)',
+                  value: item.hoursPerDay,
+                  step: 0.5,
+                  min: 0.1,
+                  max: 24.0,
+                  isDecimal: true,
+                  isDark: isDark,
+                  onChanged: (val) {
+                    setState(() {
+                      item.hoursPerDay = val;
+                    });
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGuideRow(String label, String desc) {
+  Widget _buildGuidelineCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCardBg : Colors.blueGrey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : Colors.blueGrey.shade200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 18,
+                color: isDark ? AppColors.energyGreen : const Color(0xFF1B6A3B),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                widget.isBangla
+                    ? 'ব্যবহার নির্দেশিকা ও টিপস'
+                    : 'Usage Guide & Tips',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isDark
+                      ? AppColors.energyGreen
+                      : const Color(0xFF1B6A3B),
+                ),
+              ),
+            ],
+          ),
+          Divider(
+            height: 16,
+            color: isDark ? AppColors.darkBorder : Colors.blueGrey.shade200,
+          ),
+          _buildGuideRow(
+            widget.isBangla ? 'ইনপুট টিপস' : 'Input Tip',
+            widget.isBangla
+                ? 'মান টাইপ করতে পারেন, অথবা বক্সে চাপ দিয়ে ধরে ওপরে/নিচে টেনে (Drag) সহজেই বাড়াতে-কমাতে পারেন।'
+                : 'Type directly or drag up/down on the box to increase or decrease values.',
+            isDark,
+          ),
+          _buildGuideRow(
+            widget.isBangla ? 'উৎস' : 'Source',
+            widget.isBangla
+                ? 'বিদ্যুতের ধরন নির্বাচন করুন (এসি অথবা ডিসি)।'
+                : 'Select current type used for item (AC or DC).',
+            isDark,
+          ),
+          _buildGuideRow(
+            widget.isBangla ? 'ব্যবহার' : 'Usage',
+            widget.isBangla
+                ? 'যন্ত্রটি দিনে গড়ে কত ঘণ্টা চালানো হয়।'
+                : 'Average hours the appliance runs per day.',
+            isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideRow(String label, String desc, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3.0),
       child: Row(
@@ -420,21 +526,28 @@ class _ApplianceInputScreenState extends State<ApplianceInputScreen> {
             width: 75,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
-                color: Colors.black87,
+                color: isDark ? AppColors.darkTextPrimary : Colors.black87,
               ),
             ),
           ),
-          const Text(
+          Text(
             ': ',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
           ),
           Expanded(
             child: Text(
               desc,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.darkTextSecondary : Colors.black54,
+              ),
             ),
           ),
         ],
@@ -443,9 +556,6 @@ class _ApplianceInputScreenState extends State<ApplianceInputScreen> {
   }
 }
 
-// ==========================================
-// ড্র্যাগ আপ/ডাউন এবং সরাসরি টাইপ করার উইজেট
-// ==========================================
 class DragSpinInputField extends StatefulWidget {
   final String label;
   final double value;
@@ -453,6 +563,7 @@ class DragSpinInputField extends StatefulWidget {
   final double min;
   final double max;
   final bool isDecimal;
+  final bool isDark;
   final ValueChanged<double> onChanged;
 
   const DragSpinInputField({
@@ -463,6 +574,7 @@ class DragSpinInputField extends StatefulWidget {
     required this.min,
     required this.max,
     required this.isDecimal,
+    required this.isDark,
     required this.onChanged,
   });
 
@@ -502,10 +614,7 @@ class _DragSpinInputFieldState extends State<DragSpinInputField> {
   }
 
   void _handleVerticalDragUpdate(DragUpdateDetails details) {
-    // ওপরে ড্র্যাগ করলে পজিটিভ, নিচে ড্র্যাগ করলে নেগেটিভ
     _dragAccumulator -= details.primaryDelta ?? 0.0;
-
-    // প্রতি 10 পিক্সেল ড্র্যাগে একটি স্টেপ পরিবর্তন
     const double sensitivity = 10.0;
 
     if (_dragAccumulator.abs() >= sensitivity) {
@@ -531,19 +640,57 @@ class _DragSpinInputFieldState extends State<DragSpinInputField> {
         keyboardType: TextInputType.numberWithOptions(
           decimal: widget.isDecimal,
         ),
+        style: TextStyle(
+          color: widget.isDark
+              ? AppColors.darkTextPrimary
+              : AppColors.lightTextPrimary,
+          fontSize: 13,
+        ),
         decoration: InputDecoration(
           labelText: widget.label,
-          labelStyle: const TextStyle(fontSize: 12),
+          labelStyle: TextStyle(
+            fontSize: 12,
+            color: widget.isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary,
+          ),
+          filled: true,
+          fillColor: widget.isDark
+              ? AppColors.darkInputBg
+              : AppColors.lightInputBg,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 10,
             vertical: 10,
           ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          suffixIcon: const Column(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(
+              color: widget.isDark
+                  ? AppColors.darkBorder
+                  : AppColors.lightBorder,
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(
+              color: widget.isDark
+                  ? AppColors.darkBorder
+                  : AppColors.lightBorder,
+            ),
+          ),
+          suffixIcon: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.arrow_drop_up, size: 16, color: Colors.grey),
-              Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+              Icon(
+                Icons.arrow_drop_up,
+                size: 16,
+                color: widget.isDark ? Colors.white54 : Colors.grey,
+              ),
+              Icon(
+                Icons.arrow_drop_down,
+                size: 16,
+                color: widget.isDark ? Colors.white54 : Colors.grey,
+              ),
             ],
           ),
         ),

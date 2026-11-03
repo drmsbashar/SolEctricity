@@ -1,12 +1,36 @@
 import 'dart:math' as math;
 
-import '../models/system_sizing_params.dart';
 import '../models/solar_calculation_result.dart';
+import '../models/system_sizing_params.dart';
 
 class SolarCalculationService {
   static const double bosEfficiency = 0.85;
   static const double tempDeratingFactor = 0.90;
   static const double nominalBatteryBlockVoltage = 12.0;
+
+  // 🌍 প্যাকিং ফ্যাক্টর ক্যালকুলেশন (স্ক্রিনগুলোর ডুপ্লিকেট দূর করতে কেন্দ্রীয় মেথড)
+  static double calculateDynamicPackingFactor(double latitude) {
+    final double absLat = latitude.abs();
+    if (absLat <= 15.0) return 0.75;
+    if (absLat <= 25.0) return 0.75 - ((absLat - 15.0) / 10.0) * 0.07;
+    if (absLat <= 35.0) return 0.68 - ((absLat - 25.0) / 10.0) * 0.08;
+    return 0.58;
+  }
+
+  // 🌡️ সেল তাপমাত্রা জনিত অপচয় (Temp Derate) ক্যালকুলেশন
+  static double calculateTempDerateFactor(double ambientTemp) {
+    const double noct = 45.0;
+    const double tempCoeff = 0.0035;
+    final double cellTemp = ambientTemp + (noct - 20.0);
+    if (cellTemp <= 25.0) return 1.0;
+    final double loss = (cellTemp - 25.0) * tempCoeff;
+    return (1.0 - loss).clamp(0.75, 1.0);
+  }
+
+  // 📐 সর্বোত্তম কাত কোণ (Tilt Angle)
+  static double calculateOptimalTilt(double latitude) {
+    return (latitude.abs() * 0.90).clamp(10.0, 45.0);
+  }
 
   static SolarCalculationResult calculate({
     required double dailyAcWh,
@@ -26,15 +50,13 @@ class SolarCalculationService {
     final double effectiveAcWh = hasAc ? (dailyAcWh / inverterEff) : 0.0;
     final double totalDailyWh = dailyDcWh + effectiveAcWh;
 
-    // ১. Ah ডিমান্ড (অন-গ্রিডে ব্যাটারি বাস না থাকায় Ah = 0)
     final double energyDemandAh = (!isGridTied && params.systemVoltage > 0)
         ? (totalDailyWh / params.systemVoltage)
         : 0.0;
 
-    // ২. সৌর প্যানেলের মোট ক্ষমতা হিসাব
     final double batEff = (!isGridTied && params.batteryEfficiency > 0)
         ? (params.batteryEfficiency / 100.0)
-        : 1.0; // অন-গ্রিডে ব্যাটারি অপচয় নেই
+        : 1.0;
 
     final double overallGenEfficiency =
         batEff * bosEfficiency * tempDeratingFactor;
@@ -43,17 +65,14 @@ class SolarCalculationService {
     final double requiredDailyWh = totalDailyWh / overallGenEfficiency;
     final double requiredPvWatt = requiredDailyWh / psh;
 
-    // মোট ন্যূনতম প্যানেল সংখ্যা আগে বের করা হলো
     final int minPanels = (params.panelPmax > 0)
         ? (requiredPvWatt / params.panelPmax).ceil()
         : 1;
 
-    // ৩. প্যানেল সিরিজ (pvs) নির্ধারণ (লজিক্যাল সংশোধন)
     int pvs = 1;
     final double panelVmp = params.panelVmp > 0 ? params.panelVmp : 18.0;
 
     if (isGridTied) {
-      // অন-গ্রিডে মোট প্যানেলের চেয়ে সিরিজ যেন বেশি না হয়
       final int idealGridSeries = (panelVmp < 35.0) ? 6 : 4;
       pvs = math.max(1, math.min(minPanels, idealGridSeries));
     } else if (params.controllerType == 'pwm' && !isHybrid) {
@@ -65,13 +84,10 @@ class SolarCalculationService {
         pvs = 1;
       }
     } else {
-      // MPPT এবং হাইব্রিড ইনভার্টারের জন্য নির্ভুল ভোল্টেজ ম্যাপিং
       if (params.systemVoltage == 12.0) {
         pvs = (panelVmp < 25.0) ? 2 : 1;
       } else if (params.systemVoltage == 24.0) {
-        pvs = (panelVmp < 30.0)
-            ? 2
-            : 1; // 👈 ফিক্সড: ৩০V এর নিচে হলে ২টি, বেশি হলে ১টি
+        pvs = (panelVmp < 30.0) ? 2 : 1;
       } else {
         pvs = (panelVmp < 25.0) ? 4 : 2;
       }
@@ -88,7 +104,6 @@ class SolarCalculationService {
     final double arrayImp = pvp * params.panelImp;
     final double arrayIsc = pvp * params.panelIsc;
 
-    // ৪. ব্যাটারি ব্যাংক হিসাব (অন-গ্রিডে সম্পূর্ণ ০)
     double totalRequiredBatAh = 0.0;
     int batSeries = 0;
     int batParallel = 0;
@@ -117,7 +132,6 @@ class SolarCalculationService {
       totalBatteries = batSeries * batParallel;
     }
 
-    // ৫. চার্জ কন্ট্রোলার কারেন্ট (অন-গ্রিডে N/A)
     double controllerAmpere = 0.0;
     if (!isGridTied) {
       if (params.controllerType == 'pwm' && !isHybrid) {
@@ -128,33 +142,25 @@ class SolarCalculationService {
       controllerAmpere = double.parse(controllerAmpere.toStringAsFixed(1));
     }
 
-    // ৬. ইনভার্টার ক্ষমতা নির্ধারণ (অন-গ্রিডে সরাসরি kW রেটিং)
     double inverterCapacityVa = 0.0;
     final double pf = (params.inverterPowerFactor > 0)
         ? params.inverterPowerFactor
         : 0.85;
 
     if (isGridTied) {
-      // অন-গ্রিড ইনভার্টার সরাসরি পিভি অ্যারের ওয়াট রেটিং অনুযায়ী হয় (PF বিভাজন অপ্রয়োজনীয়)
       inverterCapacityVa = totalArrayWatt;
     } else if (hasAc) {
       inverterCapacityVa = (acPeakWatt * 1.25) / pf;
     }
     inverterCapacityVa = double.parse(inverterCapacityVa.toStringAsFixed(0));
 
-    // ==========================================
-    // 🛡️ সুরক্ষাব্যবস্থা হিসাব (Protection Sizing)
-    // ==========================================
-    // ১. পিভি ডিসি ব্রেকার
     final double calculatedPvBreaker = arrayIsc * 1.25;
     final double pvBreakerAmp = _getStandardBreakerRating(calculatedPvBreaker);
 
-    // ২. কন্ট্রোলার টু ব্যাটারি ব্রেকার (হাইব্রিড বা অন-গ্রিডে প্রয়োজন নেই)
     final double chargeControllerBreakerAmp = (!isGridTied && !isHybrid)
         ? _getStandardBreakerRating(controllerAmpere * 1.15)
         : 0.0;
 
-    // ৩. ব্যাটারি ডিসি ফিউজ (অন-গ্রিডে ০)
     double batteryFuseAmp = 0.0;
     if (!isGridTied) {
       if (hasAc && params.systemVoltage > 0) {
@@ -166,14 +172,12 @@ class SolarCalculationService {
       }
     }
 
-    // ৪. এসি ব্রেকার (220V)
     double acBreakerAmp = 0.0;
     if (hasAc) {
       final double acCurrent = inverterCapacityVa / 220.0;
       acBreakerAmp = _getStandardBreakerRating(acCurrent * 1.25);
     }
 
-    // ৫. ক্যাবল সাইজ
     final String pvCableSizeMm = _determinePvCableSize(arrayIsc);
     final String batteryCableSizeMm = !isGridTied
         ? _determineBatteryCableSize(

@@ -1,6 +1,9 @@
 class AppAssets {
   // Images
+  static const String logoBn = 'assets/images/app_logo_bn.png';
+  static const String logoEn = 'assets/images/app_logo_en.png';
   static const String bgHome = 'assets/images/bg_home.png';
+  static const String bgHomeDark = 'assets/images/bg_home_dark.png';
   static const String bcsirLogo = 'assets/images/bcsir_logo.png';
   static const String appIcon = 'assets/images/app-icon.png';
 

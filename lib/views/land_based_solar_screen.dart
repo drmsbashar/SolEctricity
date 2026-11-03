@@ -5,8 +5,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../constants/app_colors.dart';
 import '../services/location_search_service.dart';
+import '../services/solar_calculation_service.dart';
 import '../services/solar_radiation_service.dart';
+import '../widgets/theme_toggle_button.dart';
 
 enum DrawingMode { boundary, obstacle }
 
@@ -43,7 +46,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   BitmapDescriptor? _whiteDotIcon;
   static const LatLng _initialPosition = LatLng(23.8103, 90.4125);
 
-  // ⚡ সোলার সাইজিং ও নাসা থেকে প্রাপ্ত ডাটা
+  // ⚡ সোলার সাইজিং ও নাসা ডাটা
   double _selectedModuleEfficiency = 0.215;
   int _selectedModuleWatt = 550;
   bool _isLoadingNasa = false;
@@ -138,32 +141,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
       lngSum += p.longitude;
     }
     return LatLng(latSum / points.length, lngSum / points.length);
-  }
-
-  double _calculateDynamicPackingFactor(double latitude) {
-    final double absLat = latitude.abs();
-    if (absLat <= 15.0) {
-      return 0.75;
-    } else if (absLat <= 25.0) {
-      return 0.75 - ((absLat - 15.0) / 10.0) * 0.07;
-    } else if (absLat <= 35.0) {
-      return 0.68 - ((absLat - 25.0) / 10.0) * 0.08;
-    } else {
-      return 0.58;
-    }
-  }
-
-  double _calculateOptimalTilt(double latitude) {
-    return (latitude.abs() * 0.90).clamp(10.0, 45.0);
-  }
-
-  double _calculateTempDerateFactor(double ambientTemp) {
-    const double noct = 45.0;
-    const double tempCoeff = 0.0035;
-    final double cellTemp = ambientTemp + (noct - 20.0);
-    if (cellTemp <= 25.0) return 1.0;
-    final double loss = (cellTemp - 25.0) * tempCoeff;
-    return (1.0 - loss).clamp(0.75, 1.0);
   }
 
   void _onMapTapped(LatLng position) {
@@ -287,7 +264,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     );
   }
 
-  Future<void> _openSolarEstimationSheet(double netUsableSqM) async {
+  Future<void> _openSolarEstimationSheet(
+    double netUsableSqM,
+    bool isDark,
+  ) async {
     final centroid = _calculateCentroid(_boundaryPoints);
 
     setState(() {
@@ -328,9 +308,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         onTap: () {},
         child: StatefulBuilder(
           builder: (context, setSheetState) {
-            final double dynamicPackingFactor = _calculateDynamicPackingFactor(
-              centroid.latitude,
-            );
+            final double dynamicPackingFactor =
+                SolarCalculationService.calculateDynamicPackingFactor(
+                  centroid.latitude,
+                );
             final double effectivePanelAreaSqM =
                 netUsableSqM * dynamicPackingFactor;
             final double systemCapacityKwp =
@@ -338,7 +319,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
             final int totalModules =
                 ((systemCapacityKwp * 1000) / _selectedModuleWatt).round();
 
-            final double tempDerate = _calculateTempDerateFactor(_ambientTemp);
+            final double tempDerate =
+                SolarCalculationService.calculateTempDerateFactor(_ambientTemp);
             final double psh =
                 _nasaPeakSunHours ?? SolarRadiationService.defaultPsh;
             final double effectivePR = 0.80 * tempDerate;
@@ -346,21 +328,26 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                 systemCapacityKwp * psh * effectivePR;
             final double monthlyGenerationKwh = dailyGenerationKwh * 30;
 
-            final double optimalTilt = _calculateOptimalTilt(centroid.latitude);
+            final double optimalTilt =
+                SolarCalculationService.calculateOptimalTilt(centroid.latitude);
 
             return DefaultTabController(
               length: 3,
               child: Container(
-                height: MediaQuery.of(context).size.height * 0.60,
+                height: MediaQuery.of(context).size.height * 0.62,
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1E293B),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black54,
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.5 : 0.15,
+                      ),
                       blurRadius: 20,
-                      offset: Offset(0, -5),
+                      offset: const Offset(0, -5),
                     ),
                   ],
                 ),
@@ -372,7 +359,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: isDark ? Colors.white24 : Colors.grey.shade400,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -386,39 +373,52 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             _isBangla
                                 ? 'সৌর সম্ভাব্যতা বিশ্লেষণ'
                                 : 'Solar Potential Analysis',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                               fontSize: 16.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                        // 🛰️ উপরে ডানপাশে শুধুমাত্র ডেটা সোর্স
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.cyanAccent.withValues(alpha: 0.12),
+                            color:
+                                (isDark
+                                        ? AppColors.accentCyan
+                                        : AppColors.energyGreen)
+                                    .withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.cyanAccent.withValues(alpha: 0.3),
+                              color:
+                                  (isDark
+                                          ? AppColors.accentCyan
+                                          : AppColors.energyGreen)
+                                      .withValues(alpha: 0.3),
                             ),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 Icons.satellite_alt_rounded,
-                                color: Colors.cyanAccent,
+                                color: isDark
+                                    ? AppColors.accentCyan
+                                    : AppColors.energyGreen,
                                 size: 12,
                               ),
-                              SizedBox(width: 4),
+                              const SizedBox(width: 4),
                               Text(
                                 'NASA POWER',
                                 style: TextStyle(
-                                  color: Colors.cyanAccent,
+                                  color: isDark
+                                      ? AppColors.accentCyan
+                                      : AppColors.energyGreen,
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -429,12 +429,17 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-
                     TabBar(
-                      indicatorColor: Colors.cyanAccent,
+                      indicatorColor: isDark
+                          ? AppColors.accentCyan
+                          : AppColors.energyGreen,
                       indicatorWeight: 2.5,
-                      labelColor: Colors.cyanAccent,
-                      unselectedLabelColor: Colors.white54,
+                      labelColor: isDark
+                          ? AppColors.accentCyan
+                          : AppColors.energyGreen,
+                      unselectedLabelColor: isDark
+                          ? Colors.white54
+                          : AppColors.lightTextSecondary,
                       labelStyle: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -458,7 +463,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
                     Expanded(
                       child: TabBarView(
                         children: [
@@ -473,15 +477,21 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.05),
+                                    color:
+                                        (isDark
+                                                ? AppColors.accentCyan
+                                                : AppColors.energyGreen)
+                                            .withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.explore_outlined,
                                         size: 14,
-                                        color: Colors.cyanAccent,
+                                        color: isDark
+                                            ? AppColors.accentCyan
+                                            : AppColors.energyGreen,
                                       ),
                                       const SizedBox(width: 6),
                                       Expanded(
@@ -489,8 +499,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           _isBangla
                                               ? 'অক্ষাংশ: ${centroid.latitude.toStringAsFixed(2)}°N | প্যাকিং: ${(dynamicPackingFactor * 100).toStringAsFixed(1)}%'
                                               : 'Lat: ${centroid.latitude.toStringAsFixed(2)}°N | Packing: ${(dynamicPackingFactor * 100).toStringAsFixed(1)}%',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? AppColors.darkTextSecondary
+                                                : AppColors.lightTextSecondary,
                                             fontSize: 11,
                                           ),
                                         ),
@@ -499,13 +511,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 10),
-
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0F172A),
+                                    color: isDark
+                                        ? AppColors.darkInputBg
+                                        : AppColors.lightInputBg,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.white12),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? AppColors.darkBorder
+                                          : AppColors.lightBorder,
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
@@ -518,19 +535,25 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                               _isBangla
                                                   ? 'প্যানেল দক্ষতা'
                                                   : 'Module Efficiency',
-                                              style: const TextStyle(
-                                                color: Colors.white60,
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? AppColors
+                                                          .darkTextSecondary
+                                                    : AppColors
+                                                          .lightTextSecondary,
                                                 fontSize: 11,
                                               ),
                                             ),
                                             DropdownButton<double>(
                                               value: _selectedModuleEfficiency,
                                               isDense: true,
-                                              dropdownColor: const Color(
-                                                0xFF0F172A,
-                                              ),
-                                              style: const TextStyle(
-                                                color: Colors.cyanAccent,
+                                              dropdownColor: isDark
+                                                  ? AppColors.darkInputBg
+                                                  : AppColors.lightCardBg,
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? AppColors.accentCyan
+                                                    : const Color(0xFF0284C7),
                                                 fontSize: 12.5,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -578,7 +601,9 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                       Container(
                                         width: 1,
                                         height: 35,
-                                        color: Colors.white12,
+                                        color: isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder,
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
@@ -590,19 +615,25 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                               _isBangla
                                                   ? 'মডিউল ক্ষমতা'
                                                   : 'Module Rating',
-                                              style: const TextStyle(
-                                                color: Colors.white60,
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? AppColors
+                                                          .darkTextSecondary
+                                                    : AppColors
+                                                          .lightTextSecondary,
                                                 fontSize: 11,
                                               ),
                                             ),
                                             DropdownButton<int>(
                                               value: _selectedModuleWatt,
                                               isDense: true,
-                                              dropdownColor: const Color(
-                                                0xFF0F172A,
-                                              ),
-                                              style: const TextStyle(
-                                                color: Colors.cyanAccent,
+                                              dropdownColor: isDark
+                                                  ? AppColors.darkInputBg
+                                                  : AppColors.lightCardBg,
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? AppColors.accentCyan
+                                                    : const Color(0xFF0284C7),
                                                 fontSize: 12.5,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -657,7 +688,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-
                                 Row(
                                   children: [
                                     _buildStatCard(
@@ -669,7 +699,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                       subtitle:
                                           'কার্যকর: ${effectivePanelAreaSqM.toStringAsFixed(1)} m²',
                                       icon: Icons.flash_on_rounded,
-                                      color: Colors.greenAccent,
+                                      color: isDark
+                                          ? AppColors.accentCyan
+                                          : const Color(0xFF0284C7),
+                                      isDark: isDark,
                                     ),
                                     const SizedBox(width: 8),
                                     _buildStatCard(
@@ -678,11 +711,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           : 'Total Panels',
                                       value: _isBangla
                                           ? '$totalModules টি'
-                                          : '$totalModules pcs', // 💡 বাংলা হলে 'টি', ইংরেজি হলে 'pcs'
+                                          : '$totalModules pcs',
                                       subtitle:
                                           '$_selectedModuleWatt Watt Modules',
                                       icon: Icons.grid_view_rounded,
-                                      color: Colors.amberAccent,
+                                      color: AppColors.solarGold,
+                                      isDark: isDark,
                                     ),
                                   ],
                                 ),
@@ -699,7 +733,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           ? 'ইউনিট / দিন'
                                           : 'kWh / Day',
                                       icon: Icons.wb_sunny_rounded,
-                                      color: Colors.cyanAccent,
+                                      color: AppColors.energyGreen,
+                                      isDark: isDark,
                                     ),
                                     const SizedBox(width: 8),
                                     _buildStatCard(
@@ -712,7 +747,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           ? 'ইউনিট / মাস'
                                           : 'kWh / Month',
                                       icon: Icons.calendar_month_rounded,
-                                      color: Colors.tealAccent,
+                                      color: isDark
+                                          ? Colors.tealAccent
+                                          : const Color(0xFF0D9488),
+                                      isDark: isDark,
                                     ),
                                   ],
                                 ),
@@ -725,14 +763,19 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // 🌡️ তাপমাত্রা এরিয়া গ্রাফ (যার ভেতরেই লস ও PR যুক্ত)
                                 if (_monthlyTempAvg.isNotEmpty) ...[
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF0F172A),
+                                      color: isDark
+                                          ? AppColors.darkInputBg
+                                          : AppColors.lightInputBg,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.white12),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder,
+                                      ),
                                     ),
                                     child: Column(
                                       crossAxisAlignment:
@@ -754,15 +797,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                   _isBangla
                                                       ? 'তাপমাত্রা প্রোফাইল (°C)'
                                                       : 'Temperature Profile (°C)',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
+                                                  style: TextStyle(
+                                                    color: isDark
+                                                        ? AppColors
+                                                              .darkTextPrimary
+                                                        : AppColors
+                                                              .lightTextPrimary,
                                                     fontSize: 12.5,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            // 💡 থার্মাল লস ও পারফরম্যান্স রেশিও ফ্যাক্টর
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -770,12 +816,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                     vertical: 3,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: Colors.redAccent
+                                                color: AppColors.alertRed
                                                     .withValues(alpha: 0.12),
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                                 border: Border.all(
-                                                  color: Colors.redAccent
+                                                  color: AppColors.alertRed
                                                       .withValues(alpha: 0.3),
                                                 ),
                                               ),
@@ -784,7 +830,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                     ? 'তাপমাত্রা লস: ${((1.0 - tempDerate) * 100).toStringAsFixed(1)}% | PR: ${(effectivePR * 100).toStringAsFixed(0)}%'
                                                     : 'Thermal Loss: ${((1.0 - tempDerate) * 100).toStringAsFixed(1)}% | PR: ${(effectivePR * 100).toStringAsFixed(0)}%',
                                                 style: const TextStyle(
-                                                  color: Colors.redAccent,
+                                                  color: AppColors.alertRed,
                                                   fontSize: 10.5,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -793,13 +839,13 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           ],
                                         ),
                                         const SizedBox(height: 10),
-                                        // গ্রাফ কন্টেইনার (Y-Axis সহ)
                                         SizedBox(
                                           height: 105,
                                           child: TemperatureEnvelopeWithAxis(
                                             tempAvg: _monthlyTempAvg,
                                             tempMax: _monthlyTempMax,
                                             tempMin: _monthlyTempMin,
+                                            isDark: isDark,
                                           ),
                                         ),
                                       ],
@@ -807,15 +853,19 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                   ),
                                 ],
                                 const SizedBox(height: 12),
-
-                                // 📊 ১২ মাসের সৌর বিকিরণ (PSH) বার-গ্রাফ (Y-Axis ও গড়ের লাইন সহ)
                                 if (_monthlyPsh.isNotEmpty)
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF0F172A),
+                                      color: isDark
+                                          ? AppColors.darkInputBg
+                                          : AppColors.lightInputBg,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.white12),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder,
+                                      ),
                                     ),
                                     child: Column(
                                       crossAxisAlignment:
@@ -829,7 +879,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                               children: [
                                                 const Icon(
                                                   Icons.wb_sunny_rounded,
-                                                  color: Colors.amberAccent,
+                                                  color: AppColors.solarGold,
                                                   size: 18,
                                                 ),
                                                 const SizedBox(width: 6),
@@ -837,15 +887,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                   _isBangla
                                                       ? 'সৌর বিকিরণ (PSH)'
                                                       : 'Solar Radiation (PSH)',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
+                                                  style: TextStyle(
+                                                    color: isDark
+                                                        ? AppColors
+                                                              .darkTextPrimary
+                                                        : AppColors
+                                                              .lightTextPrimary,
                                                     fontSize: 12.5,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            // 💡 গ্রাফের ভেতরেই বাৎসরিক গড় PSH
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -853,12 +906,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                     vertical: 3,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: Colors.amberAccent
+                                                color: AppColors.solarGold
                                                     .withValues(alpha: 0.12),
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                                 border: Border.all(
-                                                  color: Colors.amberAccent
+                                                  color: AppColors.solarGold
                                                       .withValues(alpha: 0.3),
                                                 ),
                                               ),
@@ -867,7 +920,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                     ? 'বাৎসরিক গড়: ${psh.toStringAsFixed(2)} hrs'
                                                     : 'Annual Avg: ${psh.toStringAsFixed(2)} hrs',
                                                 style: const TextStyle(
-                                                  color: Colors.amberAccent,
+                                                  color: AppColors.solarGold,
                                                   fontSize: 10.5,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -881,6 +934,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           child: SolarPshChartWithAxis(
                                             monthlyPsh: _monthlyPsh,
                                             annualAvgPsh: psh,
+                                            isDark: isDark,
                                           ),
                                         ),
                                       ],
@@ -907,7 +961,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           ? 'বার্ষিক সর্বোচ্চ উৎপাদন'
                                           : 'Annual Optimization',
                                       icon: Icons.straighten_rounded,
-                                      color: Colors.amberAccent,
+                                      color: AppColors.solarGold,
+                                      isDark: isDark,
                                     ),
                                     const SizedBox(width: 8),
                                     _buildStatCard(
@@ -919,29 +974,33 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           ? 'ঠিক দক্ষিণমুখী'
                                           : 'True South Facing',
                                       icon: Icons.compass_calibration_rounded,
-                                      color: Colors.cyanAccent,
+                                      color: isDark
+                                          ? AppColors.accentCyan
+                                          : const Color(0xFF0284C7),
+                                      isDark: isDark,
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 10),
-
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: _isCoastal
-                                        ? Colors.redAccent.withValues(
-                                            alpha: 0.12,
+                                        ? AppColors.alertRed.withValues(
+                                            alpha: 0.1,
                                           )
-                                        : Colors.blueGrey.withValues(
-                                            alpha: 0.15,
-                                          ),
+                                        : (isDark
+                                              ? AppColors.darkInputBg
+                                              : AppColors.lightInputBg),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: _isCoastal
-                                          ? Colors.redAccent.withValues(
+                                          ? AppColors.alertRed.withValues(
                                               alpha: 0.35,
                                             )
-                                          : Colors.white12,
+                                          : (isDark
+                                                ? AppColors.darkBorder
+                                                : AppColors.lightBorder),
                                     ),
                                   ),
                                   child: Row(
@@ -953,8 +1012,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                             ? Icons.warning_amber_rounded
                                             : Icons.info_outline_rounded,
                                         color: _isCoastal
-                                            ? Colors.redAccent
-                                            : Colors.cyanAccent,
+                                            ? AppColors.alertRed
+                                            : (isDark
+                                                  ? AppColors.accentCyan
+                                                  : AppColors.energyGreen),
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
@@ -973,8 +1034,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                         : 'Mounting Structure Advisory'),
                                               style: TextStyle(
                                                 color: _isCoastal
-                                                    ? Colors.redAccent
-                                                    : Colors.cyanAccent,
+                                                    ? AppColors.alertRed
+                                                    : (isDark
+                                                          ? AppColors
+                                                                .darkTextPrimary
+                                                          : AppColors
+                                                                .lightTextPrimary),
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -988,8 +1053,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                   : (_isBangla
                                                         ? 'বাতাসের স্বাভাবিক গতিবেগ ($_windSpeed m/s)। সমতল ছাদে প্যানেলের নিচে পর্যাপ্ত ফাঁকা রাখুন যাতে বাতাস সহজে চলাচল করতে পারে।'
                                                         : 'Normal wind speed ($_windSpeed m/s). Ensure adequate clearance below panels on flat roofs for natural convective cooling.'),
-                                              style: const TextStyle(
-                                                color: Colors.white70,
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? AppColors
+                                                          .darkTextSecondary
+                                                    : AppColors
+                                                          .lightTextSecondary,
                                                 fontSize: 11,
                                               ),
                                             ),
@@ -1027,14 +1096,17 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     required String subtitle,
     required IconData icon,
     required Color color,
+    required bool isDark,
   }) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
+          color: isDark ? AppColors.darkInputBg : AppColors.lightCardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1048,7 +1120,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
@@ -1067,7 +1144,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white38, fontSize: 10),
+              style: TextStyle(
+                color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                fontSize: 10,
+              ),
             ),
           ],
         ),
@@ -1077,6 +1157,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     final double netUsableSqM = math.max(0.0, _totalAreaSqM - _obstacleAreaSqM);
     final double netUsableSqFt = netUsableSqM * 10.7639;
 
@@ -1088,8 +1170,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
           polygonId: const PolygonId('boundary_polygon'),
           points: _boundaryPoints,
           strokeWidth: 2,
-          strokeColor: Colors.amberAccent,
-          fillColor: Colors.cyanAccent.withValues(alpha: 0.22),
+          strokeColor: AppColors.solarGold,
+          fillColor: isDark
+              ? AppColors.accentCyan.withValues(alpha: 0.22)
+              : AppColors.energyGreen.withValues(alpha: 0.25),
         ),
       );
     }
@@ -1100,8 +1184,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
           polygonId: PolygonId('obstacle_$i'),
           points: _obstacles[i],
           strokeWidth: 2,
-          strokeColor: Colors.redAccent,
-          fillColor: Colors.redAccent.withValues(alpha: 0.38),
+          strokeColor: AppColors.alertRed,
+          fillColor: AppColors.alertRed.withValues(alpha: 0.38),
         ),
       );
     }
@@ -1113,7 +1197,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
           points: _currentObstaclePoints,
           strokeWidth: 2,
           strokeColor: Colors.orangeAccent,
-          fillColor: Colors.redAccent.withValues(alpha: 0.38),
+          fillColor: AppColors.alertRed.withValues(alpha: 0.38),
         ),
       );
     }
@@ -1124,7 +1208,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         Polyline(
           polylineId: const PolylineId('boundary_line'),
           points: _boundaryPoints,
-          color: Colors.amberAccent,
+          color: AppColors.solarGold,
           width: 3,
         ),
       );
@@ -1134,7 +1218,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         Polyline(
           polylineId: const PolylineId('current_obs_line'),
           points: _currentObstaclePoints,
-          color: Colors.redAccent,
+          color: AppColors.alertRed,
           width: 3,
         ),
       );
@@ -1182,31 +1266,20 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         _currentObstaclePoints.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          _isBangla ? 'ছাদ বা জমি পরিমাপ' : 'Rooftop or Land Sizing',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: Text(_isBangla ? 'ছাদ বা জমি পরিমাপ' : 'Rooftop or Land Sizing'),
         actions: [
           if (hasAnyPoints) ...[
             IconButton(
               tooltip: _isBangla ? 'আগের পয়েন্ট বাতিল' : 'Undo Point',
-              icon: const Icon(Icons.undo_rounded, color: Colors.amberAccent),
+              icon: const Icon(Icons.undo_rounded, color: AppColors.solarGold),
               onPressed: _undoLastPoint,
             ),
             IconButton(
               tooltip: _isBangla ? 'সব মুছুন' : 'Clear All',
               icon: const Icon(
                 Icons.delete_sweep_rounded,
-                color: Colors.redAccent,
+                color: AppColors.alertRed,
               ),
               onPressed: _clearAll,
             ),
@@ -1216,13 +1289,13 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
             icon: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+                color: Theme.of(context).dividerColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 _isBangla ? 'ENG' : 'বাংলা',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -1264,12 +1337,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
+                            color: isDark
+                                ? AppColors.darkCardBg
+                                : AppColors.lightCardBg,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.white24),
+                            border: Border.all(
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
+                            ),
                             boxShadow: const [
                               BoxShadow(
-                                color: Colors.black45,
+                                color: Colors.black26,
                                 blurRadius: 8,
                                 offset: Offset(0, 3),
                               ),
@@ -1282,14 +1361,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                 mode: DrawingMode.boundary,
                                 label: _isBangla ? 'সীমানা' : 'Boundary',
                                 icon: Icons.crop_square_rounded,
-                                activeColor: Colors.cyanAccent,
+                                activeColor: isDark
+                                    ? AppColors.accentCyan
+                                    : AppColors.energyGreen,
+                                isDark: isDark,
                               ),
                               const SizedBox(width: 4),
                               _buildModeButton(
                                 mode: DrawingMode.obstacle,
                                 label: _isBangla ? 'বাধা/ছায়া' : 'Obstacle',
                                 icon: Icons.block_rounded,
-                                activeColor: Colors.redAccent,
+                                activeColor: AppColors.alertRed,
+                                isDark: isDark,
                               ),
                             ],
                           ),
@@ -1297,10 +1380,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         const Spacer(),
                         Material(
                           color: _isSearchBarVisible
-                              ? Colors.redAccent
-                              : const Color(0xFF1E293B),
+                              ? AppColors.alertRed
+                              : (isDark
+                                    ? AppColors.darkCardBg
+                                    : AppColors.lightCardBg),
                           borderRadius: BorderRadius.circular(14),
-                          elevation: 4,
+                          elevation: 3,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(14),
                             onTap: () {
@@ -1316,13 +1401,21 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.white24),
+                                border: Border.all(
+                                  color: isDark
+                                      ? AppColors.darkBorder
+                                      : AppColors.lightBorder,
+                                ),
                               ),
                               child: Icon(
                                 _isSearchBarVisible
                                     ? Icons.close_rounded
                                     : Icons.search_rounded,
-                                color: Colors.white,
+                                color: _isSearchBarVisible
+                                    ? Colors.white
+                                    : (isDark
+                                          ? Colors.white
+                                          : AppColors.lightTextPrimary),
                                 size: 20,
                               ),
                             ),
@@ -1334,12 +1427,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                       const SizedBox(height: 8),
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
+                          color: isDark
+                              ? AppColors.darkCardBg
+                              : AppColors.lightCardBg,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white24),
+                          border: Border.all(
+                            color: isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                          ),
                           boxShadow: const [
                             BoxShadow(
-                              color: Colors.black45,
+                              color: Colors.black26,
                               blurRadius: 8,
                               offset: Offset(0, 4),
                             ),
@@ -1348,8 +1447,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         child: TextField(
                           controller: _searchController,
                           autofocus: true,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
                             fontSize: 13.5,
                           ),
                           onChanged: _onSearchChanged,
@@ -1357,32 +1458,40 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             hintText: _isBangla
                                 ? 'এলাকা বা ভবনের নাম লিখুন...'
                                 : 'Search area or building name...',
-                            hintStyle: const TextStyle(
-                              color: Colors.white54,
+                            hintStyle: TextStyle(
+                              color: isDark
+                                  ? Colors.white54
+                                  : AppColors.lightTextSecondary,
                               fontSize: 12.5,
                             ),
-                            prefixIcon: const Icon(
+                            prefixIcon: Icon(
                               Icons.search,
-                              color: Colors.cyanAccent,
+                              color: isDark
+                                  ? AppColors.accentCyan
+                                  : AppColors.energyGreen,
                               size: 20,
                             ),
                             suffixIcon: _isSearching
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
+                                ? Padding(
+                                    padding: const EdgeInsets.all(12),
                                     child: SizedBox(
                                       width: 14,
                                       height: 14,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        color: Colors.cyanAccent,
+                                        color: isDark
+                                            ? AppColors.accentCyan
+                                            : AppColors.energyGreen,
                                       ),
                                     ),
                                   )
                                 : (_searchController.text.isNotEmpty
                                       ? IconButton(
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.clear,
-                                            color: Colors.white70,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : AppColors.lightTextSecondary,
                                             size: 18,
                                           ),
                                           onPressed: () {
@@ -1404,30 +1513,42 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                           margin: const EdgeInsets.only(top: 4),
                           constraints: const BoxConstraints(maxHeight: 220),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
+                            color: isDark
+                                ? AppColors.darkInputBg
+                                : AppColors.lightCardBg,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white12),
+                            border: Border.all(
+                              color: isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
+                            ),
                           ),
                           child: ListView.separated(
                             shrinkWrap: true,
                             itemCount: _searchResults.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(color: Colors.white10, height: 1),
+                            separatorBuilder: (_, __) => Divider(
+                              color: isDark ? Colors.white10 : Colors.black12,
+                              height: 1,
+                            ),
                             itemBuilder: (context, index) {
                               final item = _searchResults[index];
                               return ListTile(
                                 dense: true,
-                                leading: const Icon(
+                                leading: Icon(
                                   Icons.location_on_outlined,
-                                  color: Colors.cyanAccent,
+                                  color: isDark
+                                      ? AppColors.accentCyan
+                                      : AppColors.energyGreen,
                                   size: 18,
                                 ),
                                 title: Text(
                                   item.displayName,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? AppColors.darkTextPrimary
+                                        : AppColors.lightTextPrimary,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -1444,7 +1565,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         alignment: Alignment.centerLeft,
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
+                            backgroundColor: AppColors.alertRed,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -1484,14 +1605,20 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                  boxShadow: const [
+                  border: Border.all(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
+                  ),
+                  boxShadow: [
                     BoxShadow(
-                      color: Colors.black54,
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.4 : 0.15,
+                      ),
                       blurRadius: 15,
-                      offset: Offset(0, 5),
+                      offset: const Offset(0, 5),
                     ),
                   ],
                 ),
@@ -1504,15 +1631,15 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: (_boundaryPoints.length < 3)
-                                ? Colors.amberAccent.withValues(alpha: 0.15)
-                                : Colors.greenAccent.withValues(alpha: 0.15),
+                                ? AppColors.solarGold.withValues(alpha: 0.15)
+                                : AppColors.energyGreen.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             Icons.solar_power_rounded,
                             color: (_boundaryPoints.length < 3)
-                                ? Colors.amberAccent
-                                : Colors.greenAccent,
+                                ? AppColors.solarGold
+                                : AppColors.energyGreen,
                             size: 24,
                           ),
                         ),
@@ -1525,8 +1652,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                 _isBangla
                                     ? 'কার্যকর ব্যবহারযোগ্য এলাকা'
                                     : 'Net Usable Solar Area',
-                                style: const TextStyle(
-                                  color: Colors.white70,
+                                style: TextStyle(
+                                  color: isDark
+                                      ? AppColors.darkTextSecondary
+                                      : AppColors.lightTextSecondary,
                                   fontSize: 11.5,
                                 ),
                               ),
@@ -1539,8 +1668,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                     : '${netUsableSqFt.toStringAsFixed(1)} sq.ft  (${netUsableSqM.toStringAsFixed(1)} m²)',
                                 style: TextStyle(
                                   color: _boundaryPoints.length < 3
-                                      ? Colors.amberAccent
-                                      : Colors.greenAccent,
+                                      ? AppColors.solarGold
+                                      : AppColors.energyGreen,
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -1551,8 +1680,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         if (_boundaryPoints.length >= 3)
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.cyanAccent,
-                              foregroundColor: const Color(0xFF0F172A),
+                              backgroundColor: isDark
+                                  ? AppColors.accentCyan
+                                  : AppColors.energyGreen,
+                              foregroundColor: isDark
+                                  ? const Color(0xFF0F172A)
+                                  : Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -1563,14 +1696,19 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             ),
                             onPressed: _isLoadingNasa
                                 ? null
-                                : () => _openSolarEstimationSheet(netUsableSqM),
+                                : () => _openSolarEstimationSheet(
+                                    netUsableSqM,
+                                    isDark,
+                                  ),
                             child: _isLoadingNasa
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 16,
                                     height: 16,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Color(0xFF0F172A),
+                                      color: isDark
+                                          ? const Color(0xFF0F172A)
+                                          : Colors.white,
                                     ),
                                   )
                                 : Text(
@@ -1585,7 +1723,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                     ),
                     if (_obstacleAreaSqM > 0 &&
                         _boundaryPoints.length >= 3) ...[
-                      const Divider(color: Colors.white12, height: 14),
+                      Divider(
+                        color: isDark
+                            ? AppColors.darkBorder
+                            : AppColors.lightBorder,
+                        height: 14,
+                      ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1593,8 +1736,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             _isBangla
                                 ? 'মোট ছাদ: ${(_totalAreaSqM * 10.7639).toStringAsFixed(0)} sq.ft'
                                 : 'Total Roof: ${(_totalAreaSqM * 10.7639).toStringAsFixed(0)} sq.ft',
-                            style: const TextStyle(
-                              color: Colors.white54,
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.white54
+                                  : AppColors.lightTextSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -1603,8 +1748,9 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                 ? 'বাধা/ছায়া: -${(_obstacleAreaSqM * 10.7639).toStringAsFixed(0)} sq.ft'
                                 : 'Obstacle: -${(_obstacleAreaSqM * 10.7639).toStringAsFixed(0)} sq.ft',
                             style: const TextStyle(
-                              color: Colors.redAccent,
+                              color: AppColors.alertRed,
                               fontSize: 11,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
@@ -1625,6 +1771,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     required String label,
     required IconData icon,
     required Color activeColor,
+    required bool isDark,
   }) {
     final bool isSelected = _currentMode == mode;
     return Material(
@@ -1655,13 +1802,17 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
               Icon(
                 icon,
                 size: 14,
-                color: isSelected ? activeColor : Colors.white60,
+                color: isSelected
+                    ? activeColor
+                    : (isDark ? Colors.white60 : Colors.black54),
               ),
               const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white60,
+                  color: isSelected
+                      ? (isDark ? Colors.white : AppColors.lightTextPrimary)
+                      : (isDark ? Colors.white60 : Colors.black54),
                   fontSize: 11.5,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
@@ -1674,19 +1825,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   }
 }
 
-// =========================================================================
-// 📈 ১. তাপমাত্রা এরিয়া গ্রাফ উইজেট (বামে Y-Axis সহ)
-// =========================================================================
 class TemperatureEnvelopeWithAxis extends StatelessWidget {
   final Map<String, double> tempAvg;
   final Map<String, double> tempMax;
   final Map<String, double> tempMin;
+  final bool isDark;
 
   const TemperatureEnvelopeWithAxis({
     super.key,
     required this.tempAvg,
     required this.tempMax,
     required this.tempMin,
+    required this.isDark,
   });
 
   @override
@@ -1705,7 +1855,6 @@ class TemperatureEnvelopeWithAxis extends StatelessWidget {
 
     return Row(
       children: [
-        // Y-Axis লেবেল কলাম
         SizedBox(
           width: 32,
           child: Column(
@@ -1714,22 +1863,30 @@ class TemperatureEnvelopeWithAxis extends StatelessWidget {
             children: [
               Text(
                 '${maxVal.toStringAsFixed(0)}°',
-                style: const TextStyle(color: Colors.white38, fontSize: 8.5),
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8.5,
+                ),
               ),
               Text(
                 '${midVal.toStringAsFixed(0)}°',
-                style: const TextStyle(color: Colors.white38, fontSize: 8.5),
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8.5,
+                ),
               ),
               Text(
                 '${minVal.toStringAsFixed(0)}°',
-                style: const TextStyle(color: Colors.white38, fontSize: 8.5),
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8.5,
+                ),
               ),
-              const SizedBox(height: 12), // এক্স-অ্যাক্সিসের ফাঁকা রাখার জন্য
+              const SizedBox(height: 12),
             ],
           ),
         ),
         const SizedBox(width: 6),
-        // গ্রাফ ও এক্স-অ্যাক্সিস
         Expanded(
           child: Column(
             children: [
@@ -1742,6 +1899,7 @@ class TemperatureEnvelopeWithAxis extends StatelessWidget {
                     tempMin: tempMin,
                     minVal: minVal,
                     maxVal: maxVal,
+                    isDark: isDark,
                   ),
                 ),
               ),
@@ -1751,7 +1909,12 @@ class TemperatureEnvelopeWithAxis extends StatelessWidget {
                 children: tempAvg.keys.map((m) {
                   return Text(
                     m.substring(0, 1),
-                    style: const TextStyle(color: Colors.white38, fontSize: 9),
+                    style: TextStyle(
+                      color: isDark
+                          ? Colors.white38
+                          : AppColors.lightTextSecondary,
+                      fontSize: 9,
+                    ),
                   );
                 }).toList(),
               ),
@@ -1769,6 +1932,7 @@ class TemperatureEnvelopePainter extends CustomPainter {
   final Map<String, double> tempMin;
   final double minVal;
   final double maxVal;
+  final bool isDark;
 
   TemperatureEnvelopePainter({
     required this.tempAvg,
@@ -1776,6 +1940,7 @@ class TemperatureEnvelopePainter extends CustomPainter {
     required this.tempMin,
     required this.minVal,
     required this.maxVal,
+    required this.isDark,
   });
 
   @override
@@ -1784,9 +1949,8 @@ class TemperatureEnvelopePainter extends CustomPainter {
 
     final double range = (maxVal - minVal) == 0 ? 1.0 : (maxVal - minVal);
 
-    // অনুভূমিক গ্রিড লাইন
     final Paint gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
+      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05)
       ..strokeWidth = 1.0;
     canvas.drawLine(const Offset(0, 0), Offset(size.width, 0), gridPaint);
     canvas.drawLine(
@@ -1825,7 +1989,6 @@ class TemperatureEnvelopePainter extends CustomPainter {
       i++;
     }
 
-    // ১. শেডেড ব্যান্ড
     bandPath.moveTo(maxPoints.first.dx, maxPoints.first.dy);
     for (var pt in maxPoints) {
       bandPath.lineTo(pt.dx, pt.dy);
@@ -1836,24 +1999,23 @@ class TemperatureEnvelopePainter extends CustomPainter {
     bandPath.close();
 
     final Paint bandPaint = Paint()
-      ..color = Colors.orangeAccent.withValues(alpha: 0.18)
+      ..color = Colors.orangeAccent.withValues(alpha: isDark ? 0.18 : 0.22)
       ..style = PaintingStyle.fill;
     canvas.drawPath(bandPath, bandPaint);
 
-    // ২. গড় লাইন
     avgLinePath.moveTo(avgPoints.first.dx, avgPoints.first.dy);
     for (var pt in avgPoints) {
       avgLinePath.lineTo(pt.dx, pt.dy);
     }
 
     final Paint avgPaint = Paint()
-      ..color = Colors.amberAccent
+      ..color = AppColors.solarGold
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
     canvas.drawPath(avgLinePath, avgPaint);
 
-    // ডট
-    final Paint dotPaint = Paint()..color = Colors.white;
+    final Paint dotPaint = Paint()
+      ..color = isDark ? Colors.white : Colors.black87;
     for (var pt in avgPoints) {
       canvas.drawCircle(pt, 2.2, dotPaint);
     }
@@ -1863,55 +2025,75 @@ class TemperatureEnvelopePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// =========================================================================
-// 📊 ২. PSH বার-চার্ট উইজেট (বামে Y-Axis ও গড়ের ড্যাশড লাইন সহ)
-// =========================================================================
 class SolarPshChartWithAxis extends StatelessWidget {
   final Map<String, double> monthlyPsh;
   final double annualAvgPsh;
+  final bool isDark;
 
   const SolarPshChartWithAxis({
     super.key,
     required this.monthlyPsh,
     required this.annualAvgPsh,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    const double yMax = 7.0; // PSH স্কেল সর্বোচ্চ ৭.০
+    const double yMax = 7.0;
 
     return Row(
       children: [
-        // Y-Axis লেবেল কলাম
-        const SizedBox(
+        SizedBox(
           width: 24,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('6.0', style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text('4.0', style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text('2.0', style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text('0.0', style: TextStyle(color: Colors.white38, fontSize: 8)),
-              SizedBox(height: 12),
+              Text(
+                '6.0',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8,
+                ),
+              ),
+              Text(
+                '4.0',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8,
+                ),
+              ),
+              Text(
+                '2.0',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8,
+                ),
+              ),
+              Text(
+                '0.0',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontSize: 8,
+                ),
+              ),
+              const SizedBox(height: 12),
             ],
           ),
         ),
         const SizedBox(width: 6),
-        // বার গ্রাফ এরিয়া
         Expanded(
           child: Stack(
             children: [
-              // গ্রিড ও গড়ের ড্যাশড লাইন পেইন্টার
               Positioned.fill(
                 child: CustomPaint(
                   painter: PshGridAndAvgPainter(
                     annualAvgPsh: annualAvgPsh,
                     yMax: yMax,
+                    isDark: isDark,
                   ),
                 ),
               ),
-              // বার ও মাস
               Column(
                 children: [
                   Expanded(
@@ -1930,8 +2112,10 @@ class SolarPshChartWithAxis extends StatelessWidget {
                               children: [
                                 Text(
                                   entry.value.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    color: Colors.cyanAccent,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? AppColors.accentCyan
+                                        : const Color(0xFF0284C7),
                                     fontSize: 8.0,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -1942,13 +2126,18 @@ class SolarPshChartWithAxis extends StatelessWidget {
                                     return Container(
                                       height: 70 * barRatio,
                                       decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
+                                        gradient: LinearGradient(
                                           begin: Alignment.topCenter,
                                           end: Alignment.bottomCenter,
-                                          colors: [
-                                            Colors.cyanAccent,
-                                            Colors.blueAccent,
-                                          ],
+                                          colors: isDark
+                                              ? [
+                                                  AppColors.accentCyan,
+                                                  Colors.blueAccent,
+                                                ]
+                                              : [
+                                                  const Color(0xFF38BDF8),
+                                                  const Color(0xFF0284C7),
+                                                ],
                                         ),
                                         borderRadius: BorderRadius.circular(3),
                                       ),
@@ -1970,8 +2159,10 @@ class SolarPshChartWithAxis extends StatelessWidget {
                         child: Text(
                           m.substring(0, 1),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white60,
+                          style: TextStyle(
+                            color: isDark
+                                ? Colors.white60
+                                : AppColors.lightTextSecondary,
                             fontSize: 9.5,
                           ),
                         ),
@@ -1991,17 +2182,20 @@ class SolarPshChartWithAxis extends StatelessWidget {
 class PshGridAndAvgPainter extends CustomPainter {
   final double annualAvgPsh;
   final double yMax;
+  final bool isDark;
 
-  PshGridAndAvgPainter({required this.annualAvgPsh, required this.yMax});
+  PshGridAndAvgPainter({
+    required this.annualAvgPsh,
+    required this.yMax,
+    required this.isDark,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final double chartHeight =
-        size.height - 18; // নিচের টেক্সট মার্জিন বাদ দিয়ে
+    final double chartHeight = size.height - 18;
 
-    // অনুভূমিক ব্যাকগ্রাউন্ড গ্রিড লাইন
     final Paint gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
+      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05)
       ..strokeWidth = 1.0;
 
     for (double v = 2.0; v <= 6.0; v += 2.0) {
@@ -2009,10 +2203,9 @@ class PshGridAndAvgPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    // 💡 বাৎসরিক গড় PSH-এর ড্যাশড অনুভূমিক লাইন
     final double avgY = chartHeight - (annualAvgPsh / yMax) * chartHeight;
     final Paint avgLinePaint = Paint()
-      ..color = Colors.amberAccent.withValues(alpha: 0.7)
+      ..color = AppColors.solarGold.withValues(alpha: 0.8)
       ..strokeWidth = 1.2;
 
     const double dashWidth = 4.0;
