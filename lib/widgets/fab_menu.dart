@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_assets.dart';
 
-class FabMenu extends StatelessWidget {
+class FabMenu extends StatefulWidget {
   final bool isOpen;
   final bool isBangla;
   final VoidCallback onToggle;
@@ -18,116 +18,140 @@ class FabMenu extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // মূল অ্যাকশন বাটন (+ / x)
-        GestureDetector(
-          onTap: onToggle,
-          child: Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.fabGreen,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              isOpen ? Icons.close : Icons.add,
-              color: Colors.white,
-              size: 30,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
+  State<FabMenu> createState() => _FabMenuState();
+}
 
-        // ৪টি ড্রপডাউন অপশন
-        if (isOpen) ...[
-          _buildItem(
-            title: isBangla ? 'উপকরণভিত্তিক' : 'Based on load',
-            imagePath: AppAssets.menuLoad,
-            fallbackIcon: Icons.tv_rounded,
-            onTap: () => onSelectOption('Based on load'),
-          ),
-          _buildItem(
-            title: isBangla ? 'স্থানভিত্তিক' : 'Based on land',
-            imagePath: AppAssets.menuLand,
-            fallbackIcon: Icons.aspect_ratio_rounded,
-            onTap: () => onSelectOption('Based on land'),
-          ),
-          _buildItem(
-            title: isBangla ? 'খরচভিত্তিক' : 'Based on cost',
-            imagePath: AppAssets.menuCost,
-            fallbackText: '৳',
-            onTap: () => onSelectOption('Based on cost'),
-          ),
-          _buildItem(
-            title: isBangla ? 'চাহিদাভিত্তিক' : 'Based on capacity',
-            imagePath: AppAssets.menuCapacity,
-            fallbackText: 'kW',
-            onTap: () => onSelectOption('Based on capacity'),
-          ),
-        ],
-      ],
+class _FabMenuState extends State<FabMenu> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _expandAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    if (widget.isOpen) {
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FabMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isOpen != oldWidget.isOpen) {
+      if (widget.isOpen) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final options = [
+      {
+        'title': widget.isBangla ? 'উপকরণভিত্তিক' : 'Based on load',
+        'image': AppAssets.menuLoad,
+        'fallbackIcon': Icons.tv_rounded,
+        'route': 'Based on load',
+      },
+      {
+        'title': widget.isBangla ? 'স্থানভিত্তিক' : 'Based on land',
+        'image': AppAssets.menuLand,
+        'fallbackIcon': Icons.aspect_ratio_rounded,
+        'route': 'Based on land',
+      },
+      {
+        'title': widget.isBangla ? 'খরচভিত্তিক' : 'Based on cost',
+        'image': AppAssets.menuCost,
+        'fallbackText': '৳',
+        'route': 'Based on cost',
+      },
+      {
+        'title': widget.isBangla ? 'চাহিদাভিত্তিক' : 'Based on capacity',
+        'image': AppAssets.menuCapacity,
+        'fallbackText': 'kW',
+        'route': 'Based on capacity',
+      },
+    ];
+
+    return SizeTransition(
+      sizeFactor: _expandAnimation,
+      axisAlignment: -1.0,
+      child: FadeTransition(
+        opacity: _expandAnimation,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final item in options)
+              _buildMenuItem(
+                title: item['title'] as String,
+                imagePath: item['image'] as String,
+                fallbackIcon: item['fallbackIcon'] as IconData?,
+                fallbackText: item['fallbackText'] as String?,
+                onTap: () {
+                  widget.onToggle();
+                  widget.onSelectOption(item['route'] as String);
+                },
+                isDark: isDark,
+              ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildItem({
+  Widget _buildMenuItem({
     required String title,
     required String imagePath,
     IconData? fallbackIcon,
     String? fallbackText,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10.0),
-      child: InkWell(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(25),
+        behavior: HitTestBehavior.opaque,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 5,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
+            // ১. বামে আইকন
             Container(
               width: 44,
               height: 44,
-              decoration: const BoxDecoration(
-                color: Color(0xFF424242),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFF424242),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? AppColors.energyGreen : Colors.white24,
+                  width: 1.2,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
+                    color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.2),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
@@ -149,6 +173,36 @@ class FabMenu extends StatelessWidget {
                           : Icon(fallbackIcon, color: Colors.white, size: 20),
                     );
                   },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // ২. ডানে টেক্সট
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFCBD5E1),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.18),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppColors.textDark,
                 ),
               ),
             ),

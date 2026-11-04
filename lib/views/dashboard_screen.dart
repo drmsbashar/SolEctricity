@@ -8,6 +8,7 @@ import '../constants/app_colors.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/fab_menu.dart';
 import '../widgets/theme_toggle_button.dart';
+import '../widgets/solar_fusion_sun.dart';
 import 'about_screen.dart';
 import 'capacity_based_solar_screen.dart';
 import 'cost_based_solar_screen.dart';
@@ -58,7 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         height: double.infinity,
         child: Stack(
           children: [
-            // ১. ব্যাকগ্রাউন্ড ইমেজ (ডার্ক ও লাইট মোডে স্বতন্ত্র ব্যাকগ্রাউন্ড)
+            // ১. ব্যাকগ্রাউন্ড ইমেজ
             Positioned.fill(
               child: Image.asset(
                 isDark ? AppAssets.bgHomeDark : AppAssets.bgHome,
@@ -70,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // ২. থিম-সচেতন গ্রেডিয়েন্ট ওভারলে (ডার্ক মোডে কোনো কালো শেড নেই)
+            // ২. সূক্ষ্ম গ্রেডিয়েন্ট ওভারলে
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -78,11 +79,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: isDark
-                        ? [Colors.transparent, Colors.transparent]
+                        ? [
+                            Colors.black.withValues(alpha: 0.20),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.40),
+                          ]
                         : [
-                            AppColors.lightBgTop.withValues(alpha: 0.15),
-                            AppColors.lightBgBottom.withValues(alpha: 0.45),
+                            AppColors.lightBgTop.withValues(alpha: 0.10),
+                            Colors.transparent,
+                            AppColors.lightBgBottom.withValues(alpha: 0.35),
                           ],
+                    stops: const [0.0, 0.5, 1.0],
                   ),
                 ),
               ),
@@ -92,143 +99,124 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  // হেডার বার (ড্রয়ার মেনু, সেন্ট্রাল থিম টগল ও ভাষা বাটন)
+                  // ৩.১ হেডার কন্ট্রোল বার (Drawer, Theme, Language)
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16.0,
-                      vertical: 8.0,
+                      vertical: 10.0,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        InkWell(
+                        // ড্রয়ার বাটন
+                        _buildTactileCircleButton(
+                          icon: Icons.menu_rounded,
+                          iconColor: isDark
+                              ? AppColors.accentCyan
+                              : AppColors.primaryGreen,
                           onTap: () => _scaffoldKey.currentState?.openDrawer(),
-                          borderRadius: BorderRadius.circular(25),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? AppColors.darkCardBg.withValues(alpha: 0.9)
-                                  : Colors.white.withValues(alpha: 0.9),
-                              shape: BoxShape.circle,
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.menu_rounded,
-                              color: isDark
-                                  ? AppColors.accentCyan
-                                  : Colors.redAccent,
-                              size: 26,
-                            ),
-                          ),
+                          isDark: isDark,
                         ),
+
+                        // থিম টগল ও ভাষা বাটন
                         Row(
                           children: [
-                            // ☀️/🌙 স্ট্যান্ডার্ডাইজড থিম টগল বাটন
-                            Container(
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? AppColors.darkCardBg.withValues(
-                                        alpha: 0.9,
-                                      )
-                                    : Colors.white.withValues(alpha: 0.9),
-                                shape: BoxShape.circle,
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black26,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
+                            _buildTactileCircleButton(
+                              customChild: ThemeToggleButton(
+                                isBangla: isBangla,
                               ),
-                              child: ThemeToggleButton(isBangla: isBangla),
+                              onTap: null,
+                              isDark: isDark,
                             ),
-                            const SizedBox(width: 8),
-                            _buildLanguageButton(isDark),
+                            const SizedBox(width: 10),
+                            _buildTactileLanguageButton(isDark),
                           ],
                         ),
                       ],
                     ),
                   ),
+
                   const Spacer(flex: 3),
 
-                  // টাইটেল (অ্যানিমেটেড ঝলমলে সূর্য + ভাষা অনুযায়ী PNG টাইটেল লোগো + সাবটাইটেল)
+                  // ৩.২ ব্যানারহীন ওপেন টাইটেল সেকশন
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // ১. আগুনের ঝলকানিযুক্ত কাস্টম অ্যানিমেটেড সূর্য
-                          const SolarFusionSun(size: 60),
-                          const SizedBox(width: 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // সোলার ফিউশন সূর্য আইকন (ট্যাপ করলে ড্রপডাউন টগল হবে)
+                        GestureDetector(
+                          onTap: toggleMenu,
+                          behavior: HitTestBehavior.opaque,
+                          child: const SolarFusionSun(size: 90, isMini: true),
+                        ),
+                        const SizedBox(width: 14),
 
-                          // ২. টাইটেল লোগো ও সাবটাইটেল
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // “সূর্য বিদ্যুৎ / SolEctricity” লেখার বদলে আপনার PNG লোগো
-                                Image.asset(
-                                  isBangla
-                                      ? 'assets/images/app_logo_bn.png' // 👈 বাংলা লোগো
-                                      : 'assets/images/app_logo_en.png', // 👈 ইংরেজি লোগো
-                                  height: 40, // আপনার ছবির অনুপাত অনুযায়ী ৩৫-৪৫ দিতে পারেন
-                                  fit: BoxFit.contain,
-                                  alignment: Alignment.centerLeft,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Text(
-                                        isBangla
-                                            ? 'সূর্য বিদ্যুৎ'
-                                            : 'SolEctricity',
-                                        style: TextStyle(
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w900,
-                                          color: isDark
-                                              ? AppColors.energyGreen
-                                              : AppColors.titleRed,
-                                        ),
+                        // লোগো ও সাবটাইটেল
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                isBangla ? AppAssets.logoBn : AppAssets.logoEn,
+                                height: 76,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.centerLeft,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Text(
+                                      isBangla
+                                          ? 'সূর্য বিদ্যুৎ'
+                                          : 'SolEctricity',
+                                      style: TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900,
+                                        color: isDark
+                                            ? AppColors.energyGreen
+                                            : AppColors.titleRed,
+                                        shadows: const [
+                                          Shadow(
+                                            color: Colors.black38,
+                                            blurRadius: 4,
+                                            offset: Offset(1, 1),
+                                          ),
+                                        ],
                                       ),
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                isBangla
+                                    ? 'ঘরের মাঝে রবির কিরণ'
+                                    : 'Plug to the Sun',
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
+                                  color: isDark
+                                      ? AppColors.darkTextPrimary
+                                      : AppColors.textDark,
+                                  shadows: [
+                                    Shadow(
+                                      color: isDark
+                                          ? Colors.black87
+                                          : Colors.white.withValues(alpha: 0.8),
+                                      blurRadius: 3,
+                                      offset: const Offset(1, 1),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
-                                // ট্যাগলাইন / সাবটাইটেল
-                                Text(
-                                  isBangla
-                                      ? 'ঘরের মাঝে রবির কিরণ'
-                                      : 'Plug to the Sun',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? AppColors.darkTextPrimary
-                                        : AppColors.textDark,
-                                    shadows: const [
-                                      Shadow(
-                                        color: Colors.black26,
-                                        blurRadius: 4,
-                                        offset: Offset(1, 1),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
+
                   const Spacer(flex: 5),
 
-                  // ফুটার
+                  // ৩.৩ ব্যানারহীন ওপেন বিসিএসআইআর ফুটার প্ল্যাটফর্ম
                   Padding(
                     padding: const EdgeInsets.only(
                       bottom: 24.0,
@@ -240,23 +228,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         Text(
                           isBangla ? 'উপস্থাপনায়' : 'Developed by',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : AppColors.textDark,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            shadows: [
-                              Shadow(color: Colors.black54, blurRadius: 4),
+                            letterSpacing: 0.5,
+                            shadows: const [
+                              Shadow(color: Colors.black45, blurRadius: 4),
                             ],
                           ),
                         ),
                         const SizedBox(height: 8),
                         Image.asset(
                           AppAssets.bcsirLogo,
-                          height: 44,
+                          height: 46,
                           errorBuilder: (context, error, stackTrace) =>
                               const Icon(
                                 Icons.account_balance,
-                                size: 40,
+                                size: 50,
                                 color: Colors.white,
                               ),
                         ),
@@ -266,13 +255,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ? 'বাংলাদেশ বিজ্ঞান ও শিল্প গবেষণা পরিষদ\nবিজ্ঞান ও প্রযুক্তি মন্ত্রণালয়'
                               : 'Bangladesh Council of Scientific and Industrial Research\nMinistry of Science and Technology',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            height: 1.3,
+                          style: TextStyle(
+                            color: isDark ? Colors.white : AppColors.textDark,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            height: 1.35,
                             shadows: [
-                              Shadow(color: Colors.black54, blurRadius: 4),
+                              Shadow(
+                                color: isDark
+                                    ? Colors.black87
+                                    : Colors.white.withValues(alpha: 0.9),
+                                blurRadius: 4,
+                                offset: const Offset(1, 1),
+                              ),
                             ],
                           ),
                         ),
@@ -282,10 +277,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-            // ৪. ফ্লোটিং অ্যাকশন মেনু
+
+            // ৪. সোলার ফিউশন ড্রপ-ডাউন মেনু (সূর্যের ঠিক নিচে স্বাধীন লেয়ার হিসেবে অবস্থান করবে)
             Positioned(
-              top: 250,
-              right: 20,
+              top: MediaQuery.of(context).size.height * 0.45,
+              left: 50,
               child: FabMenu(
                 isOpen: isMenuOpen,
                 isBangla: isBangla,
@@ -299,25 +295,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildLanguageButton(bool isDark) {
+  Widget _buildTactileCircleButton({
+    IconData? icon,
+    Color? iconColor,
+    VoidCallback? onTap,
+    Widget? customChild,
+    required bool isDark,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCardBg : Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder
+              : const Color(0xFFCBD5E1).withValues(alpha: 0.8),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+          if (!isDark)
+            const BoxShadow(
+              color: Colors.white,
+              blurRadius: 0,
+              offset: Offset(0, -1),
+            ),
+        ],
+      ),
+      child:
+          customChild ??
+          IconButton(
+            icon: Icon(icon, color: iconColor, size: 24),
+            onPressed: onTap,
+            splashRadius: 24,
+          ),
+    );
+  }
+
+  Widget _buildTactileLanguageButton(bool isDark) {
     return InkWell(
       onTap: toggleLanguage,
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isDark
-              ? AppColors.darkCardBg.withValues(alpha: 0.9)
-              : Colors.white.withValues(alpha: 0.92),
+          color: isDark ? AppColors.darkCardBg : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isDark ? AppColors.darkBorder : Colors.black12,
+            color: isDark
+                ? AppColors.darkBorder
+                : const Color(0xFFCBD5E1).withValues(alpha: 0.8),
+            width: 1.2,
           ),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Colors.black26,
-              blurRadius: 4,
-              offset: Offset(0, 2),
+              color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -327,15 +365,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Icon(
               Icons.language,
               size: 16,
-              color: isBangla ? Colors.blue[700] : Colors.green[700],
+              color: isDark ? AppColors.accentCyan : AppColors.energyGreen,
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(
-              isBangla ? 'En' : 'বাং',
+              isBangla ? 'EN' : 'বাং',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: isBangla ? Colors.blue[900] : Colors.green[900],
+                fontSize: 12.5,
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
               ),
             ),
           ],
@@ -495,12 +533,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
             Icon(
               Icons.mail_outline_rounded,
-              color: isDark ? AppColors.accentCyan : const Color(0xFF1B6A3B),
+              color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
             ),
             const SizedBox(width: 8),
             Text(
@@ -521,17 +559,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ? 'পরবর্তী কোন সংশোধন, তথ্য ও পরামর্শের জন্য ইমেইলে যোগাযোগ করুন:'
                   : 'For any additional correction, information, or suggestion, please contact through e-mail:',
               style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
+                fontSize: 13.5,
+                height: 1.45,
                 color: isDark ? AppColors.darkTextSecondary : Colors.black87,
               ),
             ),
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkInputBg : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isDark ? AppColors.darkBorder : Colors.grey.shade300,
                 ),
@@ -539,11 +577,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: SelectableText(
                 'bashar@agni.com\nbashar@bcsir.gov.bd',
                 style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? AppColors.accentCyan
-                      : const Color(0xFF1B6A3B),
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
                   height: 1.5,
+                  fontSize: 13,
                 ),
               ),
             ),
@@ -564,210 +601,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-}
-
-/// বাস্তব সূর্যের অগ্নিকুণ্ড ও আগুনের ঝলকানির সূর্য
-/// (Organic Solar Corona & Dynamic Flame Flares)
-class SolarFusionSun extends StatefulWidget {
-  final double size;
-  final bool isMini;
-
-  const SolarFusionSun({super.key, this.size = 64, this.isMini = false});
-
-  @override
-  State<SolarFusionSun> createState() => _SolarFusionSunState();
-}
-
-class _SolarFusionSunState extends State<SolarFusionSun>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    // অবিরাম ধীরগতিতে আবর্তন ও আগুনের শিখার নৃত্য
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 22),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        // ফিউশন কোর ও আগুনের মৃদু প্রাকৃতিক স্পন্দন (Breathing Flame Pulse)
-        final pulse =
-            1.0 + 0.05 * math.sin(_controller.value * 2 * math.pi * 4);
-
-        return Transform.scale(
-          scale: widget.isMini ? 1.0 : pulse,
-          child: SizedBox(
-            width: widget.size,
-            height: widget.size,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // ১. দূরবর্তী বহিরাগত লালচে-কমলা অগ্নিরশ্মি স্তর (ঘড়ির কাটার দিকে ধীর ঘূর্ণন)
-                Transform.rotate(
-                  angle: _controller.value * 2 * math.pi,
-                  child: CustomPaint(
-                    size: Size(widget.size, widget.size),
-                    painter: _SolarFlamePainter(
-                      animValue: _controller.value,
-                      flareColor: const Color(0xFFEA580C), // প্লাজমা অরেঞ্জ
-                      flameCount: widget.isMini ? 8 : 12,
-                      scaleFactor: 1.0,
-                    ),
-                  ),
-                ),
-
-                // ২. অভ্যন্তরীণ সোনালি-হলুদ আগুনের ঝলকানি স্তর (বিপরীত ঘূর্ণন ও দ্রুত শিখা)
-                Transform.rotate(
-                  angle: -_controller.value * 2 * math.pi * 0.7,
-                  child: CustomPaint(
-                    size: Size(widget.size, widget.size),
-                    painter: _SolarFlamePainter(
-                      animValue: _controller.value + 0.3,
-                      flareColor: const Color(0xFFFBBF24), // অ্যাম্বার গোল্ড
-                      flameCount: widget.isMini ? 6 : 10,
-                      scaleFactor: 0.86,
-                    ),
-                  ),
-                ),
-
-                // ৩. প্লাজমা করোনা আভা (Soft Corona Glow Cloud)
-                Container(
-                  width: widget.size * 0.70,
-                  height: widget.size * 0.70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        const Color(0xFFF59E0B).withValues(alpha: 0.7),
-                        const Color(0xFFDC2626).withValues(alpha: 0.35),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.35, 0.75, 1.0],
-                    ),
-                  ),
-                ),
-
-                // ৪. জ্বলন্ত কেন্দ্রীয় পারমাণবিক ফিউশন কোর (উজ্জ্বল সাদা ও আগুনের বৃত্ত)
-                Container(
-                  width: widget.size * 0.46,
-                  height: widget.size * 0.46,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const RadialGradient(
-                      colors: [
-                        Colors.white,
-                        Color(0xFFFEF08A), // লেমন সোনালি কোর
-                        Color(0xFFF59E0B), // প্রখর অ্যাম্বার
-                        Color(0xFFDC2626), // জ্বলন্ত অগ্নি লাল
-                      ],
-                      stops: [0.12, 0.45, 0.80, 1.0],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.9),
-                        blurRadius: widget.size * 0.35,
-                        spreadRadius: widget.size * 0.06,
-                      ),
-                      BoxShadow(
-                        color: const Color(0xFFDC2626).withValues(alpha: 0.6),
-                        blurRadius: widget.size * 0.55,
-                        spreadRadius: widget.size * 0.12,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// বক্রাকার অগ্নিরশ্মি ও শিখা (Bézier Flame Tongues) অঙ্কনের কাস্টম পেইন্টার
-class _SolarFlamePainter extends CustomPainter {
-  final double animValue;
-  final Color flareColor;
-  final int flameCount;
-  final double scaleFactor;
-
-  _SolarFlamePainter({
-    required this.animValue,
-    required this.flareColor,
-    required this.flameCount,
-    required this.scaleFactor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = (size.width * 0.22) * scaleFactor;
-    final maxRadius = (size.width * 0.48) * scaleFactor;
-
-    for (int i = 0; i < flameCount; i++) {
-      final angle = (i * 2 * math.pi) / flameCount;
-
-      // প্রতিটি শিখার স্বতন্ত্র দোলাচল ও গতিশীল দৈর্ঘ্য (Living flame shimmer)
-      final flicker = math.sin((animValue * 2 * math.pi * 3) + (i * 1.5));
-      final flameLength = maxRadius + (flicker * (size.width * 0.04));
-
-      final path = Path();
-
-      // আগুনের শিখার শুরু (গোড়া)
-      final startX = center.dx + baseRadius * math.cos(angle - 0.16);
-      final startY = center.dy + baseRadius * math.sin(angle - 0.16);
-
-      // আগুনের শিখার ডগা (Tip of the flare)
-      final tipX = center.dx + flameLength * math.cos(angle);
-      final tipY = center.dy + flameLength * math.sin(angle);
-
-      // আগুনের শিখার শেষ প্রান্ত (গোড়া)
-      final endX = center.dx + baseRadius * math.cos(angle + 0.16);
-      final endY = center.dy + baseRadius * math.sin(angle + 0.16);
-
-      // বক্রতা ও শিখা ফোটানোর কন্ট্রোল পয়েন্ট
-      final ctrlDist = flameLength * 0.65;
-      final ctrlX1 = center.dx + ctrlDist * math.cos(angle - 0.28);
-      final ctrlY1 = center.dy + ctrlDist * math.sin(angle - 0.28);
-
-      final ctrlX2 = center.dx + ctrlDist * math.cos(angle + 0.10);
-      final ctrlY2 = center.dy + ctrlDist * math.sin(angle + 0.10);
-
-      path.moveTo(startX, startY);
-      path.quadraticBezierTo(ctrlX1, ctrlY1, tipX, tipY);
-      path.quadraticBezierTo(ctrlX2, ctrlY2, endX, endY);
-      path.close();
-
-      // মসৃণ স্বচ্ছতাযুক্ত আগুনের গ্রেডিয়েন্ট পেইন্ট
-      final paint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            flareColor.withValues(alpha: 0.85),
-            flareColor.withValues(alpha: 0.15),
-            Colors.transparent,
-          ],
-          stops: const [0.2, 0.7, 1.0],
-        ).createShader(Rect.fromCircle(center: center, radius: maxRadius))
-        ..style = PaintingStyle.fill;
-
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SolarFlamePainter oldDelegate) => true;
 }

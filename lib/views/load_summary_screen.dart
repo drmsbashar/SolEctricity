@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/appliance_item.dart';
-import '../widgets/theme_toggle_button.dart';
 
 class LoadSummaryScreen extends StatefulWidget {
   final List<ApplianceItem> items;
@@ -43,13 +42,13 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context, _currentItems),
         ),
-        title: Text(widget.isBangla ? 'লোড পর্যালোচনা' : 'Load Summary'),
-        actions: [
-          // ☀️/🌙 স্ট্যান্ডার্ডাইজড থিম টগল বাটন
-        ],
+        title: Text(
+          widget.isBangla ? 'লোড পর্যালোচনা' : 'Load Summary',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -57,8 +56,17 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isDark
-                ? [AppColors.darkBgTop, AppColors.darkBgBottom]
-                : [AppColors.lightBgTop, AppColors.lightBgBottom],
+                ? [
+                    const Color(0xFF030712),
+                    const Color(0xFF0B1120),
+                    const Color(0xFF020617),
+                  ]
+                : [
+                    const Color(0xFFDCECE4),
+                    const Color(0xFFEDF4F0),
+                    const Color(0xFFE2EBE6),
+                  ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: _currentItems.isEmpty
@@ -69,8 +77,9 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                       : 'No appliances added.',
                   style: TextStyle(
                     fontSize: 16,
+                    fontWeight: FontWeight.w600,
                     color: isDark
-                        ? AppColors.darkTextSecondary
+                        ? const Color(0xFF94A3B8)
                         : AppColors.lightTextSecondary,
                   ),
                 ),
@@ -79,14 +88,15 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 children: [
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(14.0),
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // ১. শক্তি অনুপাত বার (AC vs DC)
-                          _buildRatioCard(engine, isDark),
+                          // ১. ৩ডি শক্তি অনুপাত বার (AC vs DC Ratio Gauge)
+                          _buildTactileRatioCard(engine, isDark),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 18),
 
                           // ২. এসি উপকরণের তালিকা
                           _buildSectionHeader(
@@ -94,11 +104,12 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                                 ? 'এসি (AC) উপকরণসমূহ'
                                 : 'AC Appliances',
                             color: isDark
-                                ? AppColors.accentCyan
-                                : const Color(0xFF2563EB),
-                            icon: Icons.power,
+                                ? AppColors.skyBlue
+                                : const Color(0xFF0284C7),
+                            icon: Icons.power_rounded,
+                            isDark: isDark,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           if (engine.acItems.isEmpty)
                             _buildEmptyNotice(
                               widget.isBangla
@@ -108,10 +119,10 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                             )
                           else
                             ...engine.acItems.map(
-                              (item) => _buildItemTile(item, isDark),
+                              (item) => _buildTactileItemTile(item, isDark),
                             ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 18),
 
                           // ৩. ডিসি উপকরণের তালিকা
                           _buildSectionHeader(
@@ -119,9 +130,10 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                                 ? 'ডিসি (DC) উপকরণসমূহ'
                                 : 'DC Appliances',
                             color: AppColors.energyGreen,
-                            icon: Icons.battery_charging_full,
+                            icon: Icons.battery_charging_full_rounded,
+                            isDark: isDark,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           if (engine.dcItems.isEmpty)
                             _buildEmptyNotice(
                               widget.isBangla
@@ -131,19 +143,19 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                             )
                           else
                             ...engine.dcItems.map(
-                              (item) => _buildItemTile(item, isDark),
+                              (item) => _buildTactileItemTile(item, isDark),
                             ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
 
-                          // ৪. সারসংক্ষেপ হাইলাইট কার্ড
-                          _buildTotalSummaryCard(engine, isDark),
+                          // ৪. ইঞ্জিনিয়ারিং সারসংক্ষেপ কনসোল কার্ড
+                          _buildTactileTotalSummaryCard(engine, isDark),
                         ],
                       ),
                     ),
                   ),
 
-                  // ৫. বটম অ্যাকশন বার
+                  // ৫. বটম ফ্রস্টেড অ্যাকশন বার
                   _buildBottomActionBar(isDark),
                 ],
               ),
@@ -151,26 +163,38 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     );
   }
 
-  // এসি ও ডিসি অনুপাত কার্ড
-  Widget _buildRatioCard(LoadCalculationEngine engine, bool isDark) {
+  // ৩ডি শক্তি অনুপাত কার্ড
+  Widget _buildTactileRatioCard(LoadCalculationEngine engine, bool isDark) {
     final acPct = engine.acPercentage;
     final dcPct = engine.dcPercentage;
 
     return Container(
-      padding: const EdgeInsets.all(14.0),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
-        borderRadius: BorderRadius.circular(14),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          width: 1.4,
         ),
         boxShadow: isDark
-            ? []
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ]
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+                const BoxShadow(
+                  color: Colors.white,
+                  blurRadius: 0,
+                  offset: Offset(0, -2),
                 ),
               ],
       ),
@@ -179,48 +203,101 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                widget.isBangla
-                    ? 'এসি: ${acPct.toStringAsFixed(1)}%'
-                    : 'AC: ${acPct.toStringAsFixed(1)}%',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isDark
-                      ? AppColors.accentCyan
-                      : const Color(0xFF2563EB),
-                  fontSize: 13,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.skyBlue
+                          : const Color(0xFF0284C7),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.isBangla
+                        ? 'এসি লোড: ${acPct.toStringAsFixed(1)}%'
+                        : 'AC Load: ${acPct.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: isDark
+                          ? AppColors.skyBlue
+                          : const Color(0xFF0284C7),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                widget.isBangla
-                    ? 'ডিসি: ${dcPct.toStringAsFixed(1)}%'
-                    : 'DC: ${dcPct.toStringAsFixed(1)}%',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.energyGreen,
-                  fontSize: 13,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.energyGreen,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.isBangla
+                        ? 'ডিসি লোড: ${dcPct.toStringAsFixed(1)}%'
+                        : 'DC Load: ${dcPct.toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.energyGreen,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: SizedBox(
-              height: 10,
+          const SizedBox(height: 10),
+          Container(
+            height: 12,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF334155)
+                    : const Color(0xFFCBD5E1),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(7),
               child: Row(
                 children: [
                   Expanded(
                     flex: (acPct * 10).toInt().clamp(1, 1000),
                     child: Container(
-                      color: isDark
-                          ? AppColors.accentCyan
-                          : const Color(0xFF2563EB),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [
+                                  const Color(0xFF0284C7),
+                                  const Color(0xFF38BDF8),
+                                ]
+                              : [
+                                  const Color(0xFF0284C7),
+                                  const Color(0xFF38BDF8),
+                                ],
+                        ),
+                      ),
                     ),
                   ),
                   Expanded(
                     flex: (dcPct * 10).toInt().clamp(1, 1000),
-                    child: Container(color: AppColors.energyGreen),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF059669), Color(0xFF34D399)],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -235,17 +312,25 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     required String title,
     required Color color,
     required IconData icon,
+    required bool isDark,
   }) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: isDark ? 0.20 : 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
+        const SizedBox(width: 8),
         Text(
           title,
           style: TextStyle(
-            fontSize: 14.5,
-            fontWeight: FontWeight.bold,
-            color: color,
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+            color: isDark ? Colors.white : AppColors.lightTextPrimary,
           ),
         ),
       ],
@@ -258,7 +343,9 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
       child: Text(
         text,
         style: TextStyle(
-          color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+          color: isDark
+              ? const Color(0xFF64748B)
+              : AppColors.lightTextSecondary,
           fontStyle: FontStyle.italic,
           fontSize: 13,
         ),
@@ -266,18 +353,34 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     );
   }
 
-  Widget _buildItemTile(ApplianceItem item, bool isDark) {
+  Widget _buildTactileItemTile(ApplianceItem item, bool isDark) {
     final name = widget.isBangla ? item.nameBn : item.nameEn;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
-        borderRadius: BorderRadius.circular(12),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+          width: 1.2,
         ),
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.06),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
       ),
       child: Row(
         children: [
@@ -288,22 +391,21 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 Text(
                   name,
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                    color: isDark ? Colors.white : AppColors.lightTextPrimary,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   '${item.watt.toStringAsFixed(0)}W × ${item.quantity} | '
                   '${item.hoursPerDay.toStringAsFixed(1)} '
                   '${widget.isBangla ? 'ঘণ্টা/দিন' : 'hrs/day'}',
                   style: TextStyle(
                     fontSize: 12,
+                    fontWeight: FontWeight.w600,
                     color: isDark
-                        ? AppColors.darkTextSecondary
+                        ? const Color(0xFF94A3B8)
                         : AppColors.lightTextSecondary,
                   ),
                 ),
@@ -316,62 +418,135 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
               Text(
                 '${item.dailyEnergyWh.toStringAsFixed(0)} Wh',
                 style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  fontFamily: 'monospace',
                   color: AppColors.energyGreen,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 '${item.totalWatt.toStringAsFixed(0)} W peak',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? const Color(0xFF64748B)
+                      : Colors.grey.shade600,
                 ),
               ),
             ],
           ),
           const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(
-              Icons.delete_outline,
-              color: AppColors.alertRed,
-              size: 22,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _deleteItem(item.id),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.alertRed.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.alertRed,
+                  size: 20,
+                ),
+              ),
             ),
-            tooltip: widget.isBangla ? 'মুছুন' : 'Delete',
-            onPressed: () => _deleteItem(item.id),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTotalSummaryCard(LoadCalculationEngine engine, bool isDark) {
+  Widget _buildTactileTotalSummaryCard(
+    LoadCalculationEngine engine,
+    bool isDark,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardBg : const Color(0xFF1B6A3B),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : Colors.transparent,
+        // ডার্ক ও লাইট উভয় মোডেই বিশেষ ডিপ এনার্জি-গ্রিন সিগনেচার ব্যাকগ্রাউন্ড
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF042416), // ডার্ক মোডের বিশেষ ডিপ পাইন
+                  const Color(0xFF071B12), // গভীর মেটালিক এমারেল্ড শেড
+                ]
+              : [
+                  const Color(0xFF063A24), // লাইট মোডের মূল গাঢ় সবুজ
+                  const Color(0xFF0F4D32),
+                ],
         ),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-        ],
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF10B981)
+                    .withValues(alpha: 0.55) // ডার্কে স্পষ্ট নিয়ন ফ্রেম
+              : const Color(0xFF047857), // লাইটে শার্প এমারেল্ড বর্ডার
+          width: 1.6,
+        ),
+        boxShadow: isDark
+            ? [
+                // ডার্ক মোডের অনন্য এমারেল্ড গ্লো
+                BoxShadow(
+                  color: const Color(0xFF059669).withValues(alpha: 0.22),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+                const BoxShadow(
+                  color: Colors.black54,
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF063A24).withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.isBangla
-                ? 'শক্তি চাহিদার সারসংক্ষেপ'
-                : 'Energy Demand Summary',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF10B981).withValues(alpha: 0.20)
+                      : Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.analytics_rounded,
+                  color: AppColors.energyGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                widget.isBangla
+                    ? 'শক্তি চাহিদার সারসংক্ষেপ'
+                    : 'Energy Demand Summary',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
           ),
-          const Divider(color: Colors.white24, height: 16),
+          const Divider(color: Colors.white24, height: 20),
           _buildSummaryRow(
             label: widget.isBangla
                 ? 'এসি দৈনিক চাহিদা (ΣLac):'
@@ -384,12 +559,18 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 : 'DC Daily Demand (ΣLdc):',
             value: '${engine.sigmaLdc.toStringAsFixed(1)} Wh/day',
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.20),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF34D399).withValues(alpha: 0.6)
+                    : Colors.white.withValues(alpha: 0.3),
+                width: 1.2,
+              ),
             ),
             child: _buildSummaryRow(
               label: widget.isBangla
@@ -397,10 +578,11 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                   : 'Total Daily Energy (ΣLtotal):',
               value: '${engine.sigmaLtotal.toStringAsFixed(1)} Wh/day',
               isBold: true,
-              fontSize: 14,
+              fontSize: 15,
+              valueColor: isDark ? const Color(0xFF34D399) : Colors.white,
             ),
           ),
-          const Divider(color: Colors.white24, height: 18),
+          const Divider(color: Colors.white24, height: 22),
           _buildSummaryRow(
             label: widget.isBangla
                 ? 'ইনভার্টারের এসি পিক লোড (ΣLa):'
@@ -413,6 +595,7 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 : 'Recommended Inverter Rating (1.25×):',
             value: '≥ ${engine.recommendedInverterWatt.toStringAsFixed(0)} W',
             valueColor: AppColors.solarGold,
+            isBold: true,
           ),
         ],
       ),
@@ -427,7 +610,7 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     Color valueColor = Colors.white,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -436,7 +619,7 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
             style: TextStyle(
               color: Colors.white70,
               fontSize: fontSize,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
             ),
           ),
           Text(
@@ -444,7 +627,8 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
             style: TextStyle(
               color: valueColor,
               fontSize: fontSize,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'monospace',
             ),
           ),
         ],
@@ -454,19 +638,21 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
 
   Widget _buildBottomActionBar(bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         border: Border(
           top: BorderSide(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            width: 1.5,
           ),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, -3),
+            color: Colors.black.withValues(alpha: isDark ? 0.65 : 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, -6),
           ),
         ],
       ),
@@ -479,16 +665,17 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 onPressed: () => Navigator.pop(context, _currentItems),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: isDark
-                      ? AppColors.accentCyan
-                      : const Color(0xFF1B6A3B),
+                      ? Colors.white
+                      : AppColors.primaryGreen,
                   side: BorderSide(
                     color: isDark
-                        ? AppColors.accentCyan
-                        : const Color(0xFF1B6A3B),
+                        ? const Color(0xFF475569)
+                        : const Color(0xFFCBD5E1),
+                    width: 1.5,
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
                 child: Text(
@@ -506,18 +693,19 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isDark
                       ? AppColors.energyGreen
-                      : const Color(0xFF1B6A3B),
+                      : AppColors.primaryGreen,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 3,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
                 child: Text(
                   widget.isBangla ? 'সিস্টেম সাইজিং →' : 'System Sizing →',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ),

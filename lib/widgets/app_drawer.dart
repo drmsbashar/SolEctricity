@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../constants/app_colors.dart';
 import '../constants/app_assets.dart';
+import 'solar_fusion_sun.dart';
 
 class AppDrawer extends StatelessWidget {
   final bool isBangla;
@@ -18,23 +19,24 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Drawer(
       backgroundColor: Colors.transparent,
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF90D5E7), // উপরের হালকা নীল
-              Colors.white, // নিচের সাদা গ্রেডিয়েন্ট
-            ],
-            stops: [0.0, 1.0],
+            colors: isDark
+                ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                : [const Color(0xFF90D5E7), Colors.white],
+            stops: const [0.0, 1.0],
           ),
         ),
         child: Column(
           children: [
-            // ১. ড্রয়ার হেডার (গাঢ় সবুজ)
+            // ১. ড্রয়ার হেডার (সোলার ফিউশন আইকন)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(
@@ -43,38 +45,10 @@ class AppDrawer extends StatelessWidget {
                 right: 16,
                 bottom: 20,
               ),
-              color: AppColors.primaryGreen,
+              color: isDark ? const Color(0xFF0F172A) : AppColors.primaryGreen,
               child: Row(
                 children: [
-                  // নামের পাশে appIcon
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        AppAssets.appIcon,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(
-                              Icons.wb_sunny_rounded,
-                              color: Colors.orange,
-                              size: 30,
-                            ),
-                      ),
-                    ),
-                  ),
+                  SolarFusionSun(size: 56, isMini: true),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -116,6 +90,7 @@ class AppDrawer extends StatelessWidget {
                     title: isBangla ? 'হোম' : 'Home',
                     children: [
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconAbout,
                         fallbackIcon: Icons.info_outline,
                         iconColor: Colors.amber[800],
@@ -126,6 +101,7 @@ class AppDrawer extends StatelessWidget {
                         },
                       ),
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconLicense,
                         fallbackIcon: Icons.badge_outlined,
                         title: isBangla ? 'অনুমোদন' : 'License',
@@ -136,7 +112,7 @@ class AppDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ২. প্রকল্প (Project)
                   _buildAccordion(
@@ -146,6 +122,7 @@ class AppDrawer extends StatelessWidget {
                     title: isBangla ? 'প্রকল্প' : 'Project',
                     children: [
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconLoad,
                         fallbackIcon: Icons.tv_rounded,
                         title: isBangla ? 'উপকরণভিত্তিক' : 'Based on load',
@@ -155,6 +132,7 @@ class AppDrawer extends StatelessWidget {
                         },
                       ),
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconLand,
                         fallbackIcon: Icons.aspect_ratio_rounded,
                         title: isBangla ? 'স্থানভিত্তিক' : 'Based on land',
@@ -164,6 +142,7 @@ class AppDrawer extends StatelessWidget {
                         },
                       ),
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconCost,
                         fallbackIcon: Icons.currency_lira_rounded,
                         title: isBangla ? 'খরচভিত্তিক' : 'Based on cost',
@@ -173,6 +152,7 @@ class AppDrawer extends StatelessWidget {
                         },
                       ),
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconCapacity,
                         fallbackIcon: Icons.flash_on_rounded,
                         title: isBangla ? 'চাহিদাভিত্তিক' : 'Based on capacity',
@@ -183,10 +163,11 @@ class AppDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ৩. আর্থিক বিশ্লেষণ
                   _buildSingleItem(
+                    context: context,
                     iconPath: AppAssets.iconFinancial,
                     fallbackIcon: Icons.attach_money_rounded,
                     title: isBangla ? 'আর্থিক বিশ্লেষণ' : 'Financial Analysis',
@@ -195,7 +176,7 @@ class AppDrawer extends StatelessWidget {
                       onNavigate('Financial Analysis');
                     },
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ৪. উপকরণ (Tools)
                   _buildAccordion(
@@ -205,6 +186,7 @@ class AppDrawer extends StatelessWidget {
                     title: isBangla ? 'উপকরণ' : 'Tools',
                     children: [
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconCompass,
                         fallbackIcon: Icons.explore_outlined,
                         title: isBangla ? 'কম্পাস' : 'Compass',
@@ -214,6 +196,7 @@ class AppDrawer extends StatelessWidget {
                         },
                       ),
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconLeveler,
                         fallbackIcon: Icons.straighten_outlined,
                         title: isBangla ? 'সমতলকারী' : 'Leveler',
@@ -223,6 +206,7 @@ class AppDrawer extends StatelessWidget {
                         },
                       ),
                       _buildSubItem(
+                        context: context,
                         iconPath: AppAssets.iconProtractor,
                         fallbackIcon: Icons.change_history_outlined,
                         title: isBangla ? 'চাঁদা' : 'Protractor',
@@ -233,10 +217,11 @@ class AppDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ৫. স্থাপন (Installation)
                   _buildSingleItem(
+                    context: context,
                     iconPath: AppAssets.iconInstallation,
                     fallbackIcon: Icons.build_circle_outlined,
                     title: isBangla ? 'স্থাপন' : 'Installation',
@@ -245,10 +230,11 @@ class AppDrawer extends StatelessWidget {
                       onNavigate('Installation');
                     },
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ৬. রক্ষণাবেক্ষণ (Maintenance)
                   _buildSingleItem(
+                    context: context,
                     iconPath: AppAssets.iconMaintenance,
                     fallbackIcon: Icons.home_repair_service_outlined,
                     title: isBangla ? 'রক্ষণাবেক্ষণ' : 'Maintenance',
@@ -257,10 +243,11 @@ class AppDrawer extends StatelessWidget {
                       onNavigate('Maintenance');
                     },
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ৭. যোগাযোগ (Contact)
                   _buildSingleItem(
+                    context: context,
                     iconPath: AppAssets.iconContact,
                     fallbackIcon: Icons.mail_outline_rounded,
                     title: isBangla ? 'যোগাযোগ' : 'Contact',
@@ -269,10 +256,11 @@ class AppDrawer extends StatelessWidget {
                       onNavigate('Contact');
                     },
                   ),
-                  _divider(),
+                  _divider(isDark),
 
                   // ৮. বিসিএসআইআর ওয়েব
                   _buildSingleItem(
+                    context: context,
                     customLeading: Image.asset(
                       AppAssets.bcsirLogo,
                       height: 24,
@@ -304,49 +292,48 @@ class AppDrawer extends StatelessWidget {
     required String title,
     required List<Widget> children,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final itemColor = isDark ? Colors.white : AppColors.textDark;
+
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        leading: _buildDynamicIcon(
-          iconPath,
-          fallbackIcon,
-          24,
-          AppColors.textDark,
-        ),
+        leading: _buildDynamicIcon(iconPath, fallbackIcon, 24, itemColor),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: AppColors.textDark,
+            color: itemColor,
           ),
         ),
-        trailing: const Icon(
-          Icons.expand_more_rounded,
-          color: AppColors.textDark,
-        ),
+        trailing: Icon(Icons.expand_more_rounded, color: itemColor),
         children: children,
       ),
     );
   }
 
   Widget _buildSingleItem({
+    required BuildContext context,
     String? iconPath,
     IconData? fallbackIcon,
     Widget? customLeading,
     required String title,
     required VoidCallback onTap,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final itemColor = isDark ? Colors.white : AppColors.textDark;
+
     return ListTile(
       leading:
           customLeading ??
-          _buildDynamicIcon(iconPath, fallbackIcon, 24, AppColors.textDark),
+          _buildDynamicIcon(iconPath, fallbackIcon, 24, itemColor),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
-          color: AppColors.textDark,
+          color: itemColor,
         ),
       ),
       onTap: onTap,
@@ -354,28 +341,33 @@ class AppDrawer extends StatelessWidget {
   }
 
   Widget _buildSubItem({
+    required BuildContext context,
     String? iconPath,
     IconData? fallbackIcon,
     Color? iconColor,
     required String title,
     required VoidCallback onTap,
   }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      color: Colors.black.withValues(alpha: 0.04),
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.04),
       child: ListTile(
         contentPadding: const EdgeInsets.only(left: 48, right: 16),
         leading: _buildDynamicIcon(
           iconPath,
           fallbackIcon,
           20,
-          iconColor ?? AppColors.textMuted,
+          iconColor ?? (isDark ? Colors.white70 : AppColors.textMuted),
         ),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: AppColors.textDark,
+            color: isDark ? const Color(0xFFCBD5E1) : AppColors.textDark,
           ),
         ),
         onTap: onTap,
@@ -412,11 +404,13 @@ class AppDrawer extends StatelessWidget {
     }
   }
 
-  Widget _divider() {
+  Widget _divider(bool isDark) {
     return Divider(
       height: 1,
       thickness: 0.8,
-      color: Colors.black.withValues(alpha: 0.08),
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.10)
+          : Colors.black.withValues(alpha: 0.08),
     );
   }
 }

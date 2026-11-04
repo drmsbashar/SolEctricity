@@ -4,8 +4,6 @@ import '../constants/app_colors.dart';
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
 import '../services/pdf_report_service.dart';
-import '../widgets/theme_toggle_button.dart';
-import 'system_diagram_screen.dart';
 
 class SystemCalculationSummaryScreen extends StatefulWidget {
   final SolarCalculationResult result;
@@ -57,9 +55,9 @@ class _SystemCalculationSummaryScreenState
       appBar: AppBar(
         title: Text(
           _isBangla ? 'সিস্টেম ক্যালকুলেশন সামারি' : 'System Sizing Summary',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          // 📄 পিডিএফ রিপোর্ট শেয়ার বাটন
           IconButton(
             tooltip: _isBangla ? 'রিপোর্ট শেয়ার করুন' : 'Share PDF Report',
             icon: const Icon(Icons.share_rounded),
@@ -67,26 +65,35 @@ class _SystemCalculationSummaryScreenState
               PdfReportService.shareOrPrintReport(result, params, _isBangla);
             },
           ),
-          // ভাষা পরিবর্তন বাটন
-          IconButton(
-            onPressed: _toggleLanguage,
-            icon: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor,
-                borderRadius: BorderRadius.circular(12),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1.0,
               ),
-              child: Text(
+            ),
+            child: TextButton.icon(
+              onPressed: _toggleLanguage,
+              icon: const Icon(
+                Icons.translate_rounded,
+                color: Colors.white,
+                size: 14,
+              ),
+              label: Text(
                 _isBangla ? 'ENG' : 'বাংলা',
-                style: TextStyle(
-                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: 11.5,
                 ),
               ),
             ),
           ),
-          // হোম বাটন
           IconButton(
             tooltip: _isBangla ? 'হোম / ড্যাশবোর্ড' : 'Dashboard / Home',
             icon: const Icon(Icons.home_rounded),
@@ -102,38 +109,48 @@ class _SystemCalculationSummaryScreenState
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isDark
-                ? [AppColors.darkBgTop, AppColors.darkBgBottom]
-                : [AppColors.lightBgTop, AppColors.lightBgBottom],
+                ? [
+                    const Color(0xFF030712),
+                    const Color(0xFF0B1120),
+                    const Color(0xFF020617),
+                  ]
+                : [
+                    const Color(0xFFDCECE4),
+                    const Color(0xFFEDF4F0),
+                    const Color(0xFFE2EBE6),
+                  ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Column(
                   children: [
-                    // ১. মোট চাহিদা কার্ড
-                    _buildDarkDemandHeaderCard(result, params, isDark),
-                    const SizedBox(height: 14),
+                    // ১. সিগনেচার এনার্জি ডিমান্ড হেডব্যান্ড
+                    _buildTactileDemandHeaderCard(result, params, isDark),
+                    const SizedBox(height: 16),
 
                     // ২. সোলার পিভি অ্যারে কার্ড
                     _buildPvArrayCard(result, params, isDark),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // ৩. ব্যাটারি ব্যাংক কার্ড (অন-গ্রিড হলে সম্পূর্ণ বাদ)
                     if (!isGridTied) ...[
                       _buildBatteryBankCard(result, params, isDark),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                     ],
 
                     // ৪. পাওয়ার ইলেকট্রনিক্স কার্ড
                     _buildPowerElectronicsCard(result, params, isDark),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // ৫. সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
                     _buildProtectionAndCablesCard(result, params, isDark),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // ৬. সিস্টেম রিক্যাপ কার্ড
                     _buildSystemSpecsRecapCard(result, params, isDark),
@@ -142,27 +159,34 @@ class _SystemCalculationSummaryScreenState
               ),
             ),
 
-            // নিচে ওয়্যারিং ডায়াগ্রামের অ্যাকশন বাটন
+            // ৩ডি ইঞ্জিনিয়ারিং কন্ট্রোল ডক (নিচে ওয়্যারিং ডায়াগ্রাম অ্যাকশন বাটন)
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
+                color: isDark ? const Color(0xFF070D18) : Colors.white,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
+                  top: Radius.circular(24),
                 ),
                 border: Border(
                   top: BorderSide(
                     color: isDark
-                        ? AppColors.darkBorder
-                        : AppColors.lightBorder,
+                        ? const Color(0xFF10B981).withValues(alpha: 0.45)
+                        : const Color(0xFF94A3B8).withValues(alpha: 0.7),
+                    width: 1.6,
                   ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, -3),
+                    color: Colors.black.withValues(alpha: isDark ? 0.75 : 0.14),
+                    blurRadius: 20,
+                    offset: const Offset(0, -6),
                   ),
+                  if (!isDark)
+                    const BoxShadow(
+                      color: Colors.white,
+                      blurRadius: 0,
+                      offset: Offset(0, -1),
+                    ),
                 ],
               ),
               child: SafeArea(
@@ -174,15 +198,20 @@ class _SystemCalculationSummaryScreenState
                       backgroundColor: isDark
                           ? AppColors.energyGreen
                           : AppColors.primaryGreen,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shadowColor: isDark
+                          ? AppColors.energyGreen.withValues(alpha: 0.5)
+                          : const Color(0xFF063A24).withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      elevation: 2,
                     ),
                     onPressed: widget.onProceedToDiagram,
                     icon: const Icon(
                       Icons.account_tree_rounded,
                       color: Colors.white,
+                      size: 20,
                     ),
                     label: Text(
                       _isBangla
@@ -190,8 +219,9 @@ class _SystemCalculationSummaryScreenState
                           : 'View Wiring Diagram',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15.5,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ),
@@ -204,7 +234,7 @@ class _SystemCalculationSummaryScreenState
     );
   }
 
-  Widget _buildDarkDemandHeaderCard(
+  Widget _buildTactileDemandHeaderCard(
     SolarCalculationResult result,
     SystemSizingParams params,
     bool isDark,
@@ -227,22 +257,38 @@ class _SystemCalculationSummaryScreenState
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
-              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-              : [const Color(0xFF0F3822), const Color(0xFF1B6A3B)],
+              ? [const Color(0xFF042416), const Color(0xFF071B12)]
+              : [const Color(0xFF063A24), const Color(0xFF0F4D32)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : Colors.green.shade900,
+          color: isDark
+              ? const Color(0xFF10B981).withValues(alpha: 0.55)
+              : const Color(0xFF047857),
+          width: 1.6,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF059669).withValues(alpha: 0.22),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+                const BoxShadow(
+                  color: Colors.black54,
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF063A24).withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,27 +303,33 @@ class _SystemCalculationSummaryScreenState
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.solarGold.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.solarGold.withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Text(
                   archLabel,
                   style: const TextStyle(
                     color: AppColors.solarGold,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
@@ -286,8 +338,10 @@ class _SystemCalculationSummaryScreenState
                 result.totalDailyWh.toStringAsFixed(0),
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'monospace',
+                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(width: 6),
@@ -301,12 +355,23 @@ class _SystemCalculationSummaryScreenState
               ),
               const Spacer(),
               if (params.systemType != SolarSystemType.gridTied)
-                Text(
-                  '≈ ${result.energyDemandAh.toStringAsFixed(1)} Ah/day',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '≈ ${result.energyDemandAh.toStringAsFixed(1)} Ah/day',
+                    style: const TextStyle(
+                      color: Color(0xFF6EE7B7),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
             ],
@@ -314,19 +379,27 @@ class _SystemCalculationSummaryScreenState
           if (result.hasAcLoad &&
               result.hasDcLoad &&
               params.systemType != SolarSystemType.gridTied) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             const Divider(color: Colors.white24, height: 1),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   'AC: ${result.dailyAcWh.toStringAsFixed(0)} Wh',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 Text(
                   'DC: ${result.dailyDcWh.toStringAsFixed(0)} Wh',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -341,7 +414,7 @@ class _SystemCalculationSummaryScreenState
     SystemSizingParams params,
     bool isDark,
   ) {
-    return _buildSectionCard(
+    return _buildTactileCard(
       title: _isBangla ? 'সোলার পিভি অ্যারে' : 'Solar PV Array',
       icon: Icons.solar_power_rounded,
       highlightText: '${result.totalArrayWatt.toInt()} Wp',
@@ -422,7 +495,7 @@ class _SystemCalculationSummaryScreenState
     SystemSizingParams params,
     bool isDark,
   ) {
-    return _buildSectionCard(
+    return _buildTactileCard(
       title: _isBangla ? 'ব্যাটারি স্টোরেজ ব্যাংক' : 'Battery Storage Bank',
       icon: Icons.battery_charging_full_rounded,
       highlightText:
@@ -509,7 +582,7 @@ class _SystemCalculationSummaryScreenState
     final isGridTied = params.systemType == SolarSystemType.gridTied;
     final isHybrid = params.systemType == SolarSystemType.hybrid;
 
-    return _buildSectionCard(
+    return _buildTactileCard(
       title: _isBangla
           ? 'পাওয়ার ইলেকট্রনিক্স রেটিং'
           : 'Power Electronics Specs',
@@ -520,10 +593,12 @@ class _SystemCalculationSummaryScreenState
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkInputBg : AppColors.lightInputBg,
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                color: isDark
+                    ? const Color(0xFF334155)
+                    : const Color(0xFFCBD5E1),
               ),
             ),
             child: Row(
@@ -532,14 +607,16 @@ class _SystemCalculationSummaryScreenState
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color:
-                        (isDark ? AppColors.accentCyan : AppColors.primaryGreen)
+                        (isDark
+                                ? AppColors.energyGreen
+                                : AppColors.primaryGreen)
                             .withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     Icons.tune_rounded,
                     color: isDark
-                        ? AppColors.accentCyan
+                        ? AppColors.energyGreen
                         : AppColors.primaryGreen,
                     size: 24,
                   ),
@@ -554,20 +631,22 @@ class _SystemCalculationSummaryScreenState
                             ? 'সোলার চার্জ কন্ট্রোলার'
                             : 'Solar Charge Controller',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           color: isDark
-                              ? AppColors.darkTextSecondary
+                              ? const Color(0xFF94A3B8)
                               : AppColors.lightTextSecondary,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         '${result.controllerVoltage.toInt()}V, ≥ ${result.controllerAmpere.toInt()}A (${result.controllerType.toUpperCase()})',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'monospace',
                           color: isDark
-                              ? AppColors.darkTextPrimary
+                              ? Colors.white
                               : AppColors.lightTextPrimary,
                         ),
                       ),
@@ -579,14 +658,13 @@ class _SystemCalculationSummaryScreenState
           ),
           const SizedBox(height: 10),
         ],
-
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkInputBg : AppColors.lightInputBg,
+            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
             ),
           ),
           child: Row(
@@ -595,7 +673,7 @@ class _SystemCalculationSummaryScreenState
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color:
-                      (isDark ? AppColors.accentCyan : AppColors.primaryGreen)
+                      (isDark ? AppColors.energyGreen : AppColors.primaryGreen)
                           .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -605,7 +683,9 @@ class _SystemCalculationSummaryScreenState
                       : (isHybrid
                             ? Icons.sync_alt_rounded
                             : Icons.power_rounded),
-                  color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
+                  color: isDark
+                      ? AppColors.energyGreen
+                      : AppColors.primaryGreen,
                   size: 24,
                 ),
               ),
@@ -630,11 +710,11 @@ class _SystemCalculationSummaryScreenState
                                           ? 'অফ-গ্রিড ইনভার্টার'
                                           : 'Off-Grid Inverter')),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             color: isDark
-                                ? AppColors.darkTextSecondary
+                                ? const Color(0xFF94A3B8)
                                 : AppColors.lightTextSecondary,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         Container(
@@ -645,7 +725,7 @@ class _SystemCalculationSummaryScreenState
                           decoration: BoxDecoration(
                             color:
                                 (isDark
-                                        ? AppColors.accentCyan
+                                        ? AppColors.energyGreen
                                         : AppColors.primaryGreen)
                                     .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
@@ -660,23 +740,24 @@ class _SystemCalculationSummaryScreenState
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: isDark
-                                  ? AppColors.accentCyan
+                                  ? AppColors.energyGreen
                                   : AppColors.primaryGreen,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       isGridTied
                           ? '${(result.inverterCapacityVa / 1000).toStringAsFixed(1)} kW (220V/50Hz On-Grid)'
                           : '${result.inverterVoltage.toInt()}V DC ➔ 220V AC, ≥ ${result.inverterCapacityVa.toInt()} VA',
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
                         color: isDark
-                            ? AppColors.darkTextPrimary
+                            ? Colors.white
                             : AppColors.lightTextPrimary,
                       ),
                     ),
@@ -698,7 +779,7 @@ class _SystemCalculationSummaryScreenState
     final isGridTied = params.systemType == SolarSystemType.gridTied;
     final isHybrid = params.systemType == SolarSystemType.hybrid;
 
-    return _buildSectionCard(
+    return _buildTactileCard(
       title: _isBangla
           ? 'সুরক্ষাব্যবস্থা ও ওয়্যারিং ক্যাবল'
           : 'Protection & Wiring Cables',
@@ -813,14 +894,17 @@ class _SystemCalculationSummaryScreenState
           : 'For your daily ${result.totalDailyWh.toStringAsFixed(0)} Wh load, a balanced system of ${result.totalPanels}x ${params.panelPmax.toInt()}Wp panels and ${result.totalBatteries}x ${params.batteryCapacityAh.toInt()}Ah batteries is recommended.';
     }
 
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+    final activeColor = isDark ? AppColors.energyGreen : AppColors.primaryGreen;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: activeColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: activeColor.withValues(alpha: 0.3)),
+        color: activeColor.withValues(alpha: isDark ? 0.15 : 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: activeColor.withValues(alpha: 0.4),
+          width: 1.2,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -828,17 +912,17 @@ class _SystemCalculationSummaryScreenState
           Icon(
             Icons.check_circle_outline_rounded,
             color: activeColor,
-            size: 20,
+            size: 22,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               recapText,
               style: TextStyle(
-                fontSize: 12,
-                color: activeColor,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
+                fontSize: 12.5,
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -847,30 +931,40 @@ class _SystemCalculationSummaryScreenState
     );
   }
 
-  Widget _buildSectionCard({
+  Widget _buildTactileCard({
     required String title,
     required IconData icon,
     String? highlightText,
     required List<Widget> children,
     required bool isDark,
   }) {
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          width: 1.4,
         ),
         boxShadow: isDark
-            ? []
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ]
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+                const BoxShadow(
+                  color: Colors.white,
+                  blurRadius: 0,
+                  offset: Offset(0, -2),
                 ),
               ],
       ),
@@ -882,30 +976,64 @@ class _SystemCalculationSummaryScreenState
             children: [
               Row(
                 children: [
-                  Icon(icon, size: 20, color: activeColor),
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color:
+                          (isDark
+                                  ? AppColors.energyGreen
+                                  : AppColors.primaryGreen)
+                              .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color: isDark
+                          ? AppColors.energyGreen
+                          : AppColors.primaryGreen,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     title,
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       fontSize: 14.5,
-                      color: activeColor,
+                      color: isDark ? Colors.white : AppColors.lightTextPrimary,
                     ),
                   ),
                 ],
               ),
               if (highlightText != null)
-                Text(
-                  highlightText,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: activeColor,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        (isDark
+                                ? AppColors.energyGreen
+                                : AppColors.primaryGreen)
+                            .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    highlightText,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'monospace',
+                      fontSize: 13.5,
+                      color: isDark
+                          ? AppColors.energyGreen
+                          : AppColors.primaryGreen,
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           ...children,
         ],
       ),
@@ -918,13 +1046,14 @@ class _SystemCalculationSummaryScreenState
     required IconData icon,
     required bool isDark,
   }) {
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+    final activeColor = isDark ? AppColors.energyGreen : AppColors.primaryGreen;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: activeColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: activeColor.withValues(alpha: isDark ? 0.16 : 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: activeColor.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
@@ -935,19 +1064,17 @@ class _SystemCalculationSummaryScreenState
               title,
               style: TextStyle(
                 fontSize: 12.5,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white70 : AppColors.lightTextSecondary,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
           Text(
             value,
             style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.bold,
-              color: activeColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: isDark ? Colors.white : activeColor,
             ),
           ),
         ],
@@ -961,30 +1088,31 @@ class _SystemCalculationSummaryScreenState
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkInputBg : AppColors.lightInputBg,
-        borderRadius: BorderRadius.circular(8),
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            Icons.hub_outlined,
-            size: 14,
-            color: isDark ? Colors.white54 : Colors.grey,
+            Icons.hub_rounded,
+            size: 15,
+            color: isDark ? AppColors.energyGreen : AppColors.primaryGreen,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 11.5,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF475569),
               ),
             ),
           ),
@@ -998,13 +1126,13 @@ class _SystemCalculationSummaryScreenState
     required VoidCallback onTap,
     required bool isDark,
   }) {
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
+    final activeColor = isDark ? AppColors.energyGreen : AppColors.primaryGreen;
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1015,14 +1143,16 @@ class _SystemCalculationSummaryScreenState
                         ? 'বিস্তারিত কারিগরি স্পেসিফিকেশন দেখুন'
                         : 'Show Technical Specs'),
               style: TextStyle(
-                fontSize: 11.5,
+                fontSize: 12,
                 color: activeColor,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.bold,
               ),
             ),
             Icon(
-              isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              size: 18,
+              isExpanded
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              size: 20,
               color: activeColor,
             ),
           ],
@@ -1037,12 +1167,12 @@ class _SystemCalculationSummaryScreenState
     required bool isDark,
   }) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkInputBg : AppColors.lightInputBg,
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
         ),
       ),
       child: Column(
@@ -1053,20 +1183,19 @@ class _SystemCalculationSummaryScreenState
             style: TextStyle(
               fontSize: 10.5,
               color: isDark
-                  ? AppColors.darkTextSecondary
+                  ? const Color(0xFF94A3B8)
                   : AppColors.lightTextSecondary,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 3),
           Text(
             value,
             style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.bold,
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'monospace',
+              color: isDark ? Colors.white : AppColors.lightTextPrimary,
             ),
           ),
         ],

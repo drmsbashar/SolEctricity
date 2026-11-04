@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import '../../models/solar_calculation_result.dart';
 import '../../models/system_sizing_params.dart';
 
-// ১. মূল ক্যানভাস ওয়্যারিং পেইন্টার (স্ক্রিন সাইজের আনুপাতিক হারে সম্পূর্ণ ডায়নামিক)
 class SolarRealisticWiringPainter extends CustomPainter {
   final SolarCalculationResult result;
   final SystemSizingParams params;
   final bool isBangla;
+  final bool isDark;
+  final bool isForPrint; // পিডিএফ-এ সাদা ব্যাকগ্রাউন্ড ও হাই-কনট্রাস্টের জন্য
 
   SolarRealisticWiringPainter({
     required this.result,
     required this.params,
     required this.isBangla,
+    this.isDark = true,
+    this.isForPrint = false,
   });
 
   @override
@@ -20,24 +23,46 @@ class SolarRealisticWiringPainter extends CustomPainter {
     final double w = size.width;
     final double h = size.height;
 
+    // ব্যাকগ্রাউন্ড পেইন্ট
+    final bgPaint = Paint()
+      ..color = isForPrint
+          ? Colors.white
+          : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, w, h),
+        const Radius.circular(20),
+      ),
+      bgPaint,
+    );
+
+    // ১. ডিসি পজিটিভ (+) - লাল
     final pDcPos = Paint()
       ..color = const Color(0xFFEF4444)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke;
+
+    // ২. ডিসি নেগেটিভ (-) - গাঢ় রয়্যাল ব্লু
     final pDcNeg = Paint()
-      ..color = const Color(0xFF38BDF8)
+      ..color = const Color(0xFF1D4ED8)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke;
+
+    // ৩. এসি ফেজ / লাইভ (L) - অ্যাম্বার / কমলা
     final pAcPhase = Paint()
-      ..color = const Color(0xFFF59E0B)
+      ..color = const Color(0xFFD97706)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke;
+
+    // ৪. এসি নিউট্রাল (N) - উজ্জ্বল আকাশি / সায়ান
     final pAcNeutral = Paint()
-      ..color = const Color(0xFF38BDF8)
+      ..color = const Color(0xFF06B6D4)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke;
+
+    // ৫. গ্রিড লাইন - এমারেল্ড গ্রিন
     final pGridLive = Paint()
-      ..color = const Color(0xFF10B981)
+      ..color = const Color(0xFF059669)
       ..strokeWidth = 3.5
       ..style = PaintingStyle.stroke;
 
@@ -78,10 +103,13 @@ class SolarRealisticWiringPainter extends CustomPainter {
         );
         break;
     }
+
+    // ক্যানভাসের ভেতরেই স্থায়ী ক্যাবল নির্দেশিকা (পিডিএফ প্রিন্টেও আসবে)
+    _drawCanvasCableLegend(canvas, w, h);
   }
 
   // =========================================================================
-  // ⚡ ১. অফ-গ্রিড সিস্টেম ওয়্যারিং (Off-Grid - Dynamic Coordinates)
+  // ⚡ ১. অফ-গ্রিড সিস্টেম ওয়্যারিং
   // =========================================================================
   void _paintOffGridDiagram(
     Canvas canvas,
@@ -92,19 +120,18 @@ class SolarRealisticWiringPainter extends CustomPainter {
     Paint pAcPhase,
     Paint pAcNeutral,
   ) {
-    final pvRect = Rect.fromLTWH(w * 0.025, h * 0.10, w * 0.19, h * 0.32);
+    final pvRect = Rect.fromLTWH(w * 0.025, h * 0.08, w * 0.20, h * 0.34);
     final controllerRect = Rect.fromLTWH(
       w * 0.31,
-      h * 0.11,
-      w * 0.19,
-      h * 0.28,
+      h * 0.09,
+      w * 0.20,
+      h * 0.30,
     );
-    final batteryRect = Rect.fromLTWH(w * 0.31, h * 0.63, w * 0.19, h * 0.28);
-    final inverterRect = Rect.fromLTWH(w * 0.57, h * 0.63, w * 0.18, h * 0.28);
-    final dcLoadRect = Rect.fromLTWH(w * 0.60, h * 0.11, w * 0.16, h * 0.25);
-    final acLoadRect = Rect.fromLTWH(w * 0.83, h * 0.63, w * 0.15, h * 0.28);
+    final batteryRect = Rect.fromLTWH(w * 0.31, h * 0.55, w * 0.20, h * 0.30);
+    final inverterRect = Rect.fromLTWH(w * 0.58, h * 0.55, w * 0.19, h * 0.30);
+    final dcLoadRect = Rect.fromLTWH(w * 0.61, h * 0.09, w * 0.16, h * 0.27);
+    final acLoadRect = Rect.fromLTWH(w * 0.83, h * 0.55, w * 0.15, h * 0.30);
 
-    // ওয়্যারিং রুট
     _drawPvWires(canvas, pvRect, controllerRect, pDcPos, pDcNeg);
     _drawControllerToBatteryWires(
       canvas,
@@ -142,14 +169,13 @@ class SolarRealisticWiringPainter extends CustomPainter {
       _drawRealisticDcLoad(canvas, dcLoadRect);
     }
 
-    // বক্স রেন্ডারিং
     _drawCleanPvArray(canvas, pvRect);
     _drawCleanController(canvas, controllerRect);
     _drawRealisticBatteryBank(canvas, batteryRect);
   }
 
   // =========================================================================
-  // 🔄 ২. হাইব্রিড সিস্টেম ওয়্যারিং (Hybrid - Dynamic Coordinates)
+  // 🔄 ২. হাইব্রিড সিস্টেম ওয়্যারিং
   // =========================================================================
   void _paintHybridDiagram(
     Canvas canvas,
@@ -161,13 +187,12 @@ class SolarRealisticWiringPainter extends CustomPainter {
     Paint pAcNeutral,
     Paint pGridLive,
   ) {
-    final pvRect = Rect.fromLTWH(w * 0.025, h * 0.11, w * 0.19, h * 0.32);
-    final batteryRect = Rect.fromLTWH(w * 0.025, h * 0.58, w * 0.19, h * 0.28);
-    final hybridInvRect = Rect.fromLTWH(w * 0.33, h * 0.24, w * 0.23, h * 0.50);
-    final acLoadRect = Rect.fromLTWH(w * 0.68, h * 0.13, w * 0.18, h * 0.26);
-    final gridRect = Rect.fromLTWH(w * 0.68, h * 0.55, w * 0.18, h * 0.26);
+    final pvRect = Rect.fromLTWH(w * 0.025, h * 0.09, w * 0.20, h * 0.34);
+    final batteryRect = Rect.fromLTWH(w * 0.025, h * 0.52, w * 0.20, h * 0.30);
+    final hybridInvRect = Rect.fromLTWH(w * 0.33, h * 0.20, w * 0.24, h * 0.52);
+    final acLoadRect = Rect.fromLTWH(w * 0.68, h * 0.11, w * 0.18, h * 0.27);
+    final gridRect = Rect.fromLTWH(w * 0.68, h * 0.50, w * 0.18, h * 0.27);
 
-    // ১. পিভি টু হাইব্রিড ইনভার্টার
     final pvPos = Path()
       ..moveTo(pvRect.right, pvRect.top + pvRect.height * 0.28)
       ..lineTo(
@@ -194,34 +219,33 @@ class SolarRealisticWiringPainter extends CustomPainter {
       '${result.pvCableSizeMm} Cu',
     );
 
-    // ২. ব্যাটারি টু হাইব্রিড ইনভার্টার
-    final batPos = Path()
-      ..moveTo(batteryRect.right, batteryRect.top + batteryRect.height * 0.31)
-      ..lineTo(
-        hybridInvRect.left,
-        hybridInvRect.top + hybridInvRect.height * 0.65,
-      );
-    final batNeg = Path()
-      ..moveTo(batteryRect.right, batteryRect.top + batteryRect.height * 0.56)
-      ..lineTo(
-        hybridInvRect.left,
-        hybridInvRect.top + hybridInvRect.height * 0.77,
-      );
-    canvas.drawPath(batPos, pDcPos);
-    canvas.drawPath(batNeg, pDcNeg);
+    final double batPosY = batteryRect.top + batteryRect.height * 0.31;
+    final double invPosY = hybridInvRect.top + hybridInvRect.height * 0.65;
+    final double batNegY = batteryRect.top + batteryRect.height * 0.56;
+    final double invNegY = hybridInvRect.top + hybridInvRect.height * 0.77;
     final double midBatX = (batteryRect.right + hybridInvRect.left) / 2;
+
+    final pathBatPos = Path()
+      ..moveTo(batteryRect.right, batPosY)
+      ..lineTo(hybridInvRect.left, invPosY);
+    canvas.drawPath(pathBatPos, pDcPos);
+
+    final pathBatNeg = Path()
+      ..moveTo(batteryRect.right, batNegY)
+      ..lineTo(hybridInvRect.left, invNegY);
+    canvas.drawPath(pathBatNeg, pDcNeg);
+
     _drawBreakerBadge(
       canvas,
-      Offset(midBatX, batteryRect.top + batteryRect.height * 0.28),
+      Offset(midBatX, (batPosY + invPosY) / 2 - 18),
       'DC FUSE ≥ ${result.batteryFuseAmp.toInt()}A',
     );
     _drawLabel(
       canvas,
-      Offset(midBatX, batteryRect.top + batteryRect.height * 0.68),
+      Offset(midBatX, (batNegY + invNegY) / 2 + 16),
       '${result.batteryCableSizeMm} Cable',
     );
 
-    // ৩. হাইব্রিড ইনভার্টার টু এসি লোড
     final acP = Path()
       ..moveTo(
         hybridInvRect.right,
@@ -243,7 +267,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       'AC MCB ≥ ${result.acBreakerAmp.toInt()}A',
     );
 
-    // ৪. হাইব্রিড ইনভার্টার টু ন্যাশনাল গ্রিড
     final gridPath = Path()
       ..moveTo(
         hybridInvRect.right,
@@ -258,7 +281,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       isBangla ? 'গ্রিড সংযোগ' : 'Grid Connection',
     );
 
-    // বক্সসমূহ
     _drawCleanPvArray(canvas, pvRect);
     _drawRealisticBatteryBank(canvas, batteryRect);
     _drawHybridInverterBox(canvas, hybridInvRect);
@@ -267,7 +289,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
   }
 
   // =========================================================================
-  // 🌐 ৩. গ্রিড-টাই / অন-গ্রিড ওয়্যারিং (Grid-Tied - Dynamic Coordinates)
+  // 🌐 ৩. গ্রিড-টাই / অন-গ্রিড ওয়্যারিং
   // =========================================================================
   void _paintGridTiedDiagram(
     Canvas canvas,
@@ -279,13 +301,12 @@ class SolarRealisticWiringPainter extends CustomPainter {
     Paint pAcNeutral,
     Paint pGridLive,
   ) {
-    final pvRect = Rect.fromLTWH(w * 0.025, h * 0.28, w * 0.19, h * 0.35);
-    final stringInvRect = Rect.fromLTWH(w * 0.29, h * 0.28, w * 0.19, h * 0.35);
-    final netMeterRect = Rect.fromLTWH(w * 0.55, h * 0.30, w * 0.17, h * 0.30);
-    final acLoadRect = Rect.fromLTWH(w * 0.79, h * 0.12, w * 0.18, h * 0.26);
-    final gridRect = Rect.fromLTWH(w * 0.79, h * 0.53, w * 0.18, h * 0.26);
+    final pvRect = Rect.fromLTWH(w * 0.025, h * 0.24, w * 0.20, h * 0.36);
+    final stringInvRect = Rect.fromLTWH(w * 0.29, h * 0.24, w * 0.20, h * 0.36);
+    final netMeterRect = Rect.fromLTWH(w * 0.55, h * 0.26, w * 0.17, h * 0.32);
+    final acLoadRect = Rect.fromLTWH(w * 0.79, h * 0.10, w * 0.18, h * 0.27);
+    final gridRect = Rect.fromLTWH(w * 0.79, h * 0.49, w * 0.18, h * 0.27);
 
-    // ১. পিভি টু স্ট্রিং ইনভার্টার
     final pvPos = Path()
       ..moveTo(pvRect.right, pvRect.top + pvRect.height * 0.28)
       ..lineTo(
@@ -312,7 +333,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       '${result.pvCableSizeMm} Cu',
     );
 
-    // ২. স্ট্রিং ইনভার্টার টু নেট মিটার
     final invAcP = Path()
       ..moveTo(
         stringInvRect.right,
@@ -340,7 +360,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       'AC MCB ≥ ${result.acBreakerAmp.toInt()}A',
     );
 
-    // ৩. নেট মিটার টু হোম এসি লোড
     final meterToLoad = Path()
       ..moveTo(
         netMeterRect.right,
@@ -357,7 +376,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..lineTo(acLoadRect.left, acLoadRect.top + acLoadRect.height * 0.46);
     canvas.drawPath(meterToLoad, pAcPhase);
 
-    // ৪. নেট মিটার টু ন্যাশনাল গ্রিড
     final meterToGrid = Path()
       ..moveTo(
         netMeterRect.right,
@@ -386,7 +404,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
       isBangla ? 'দ্বিমুখী প্রবাহ' : 'Bi-directional',
     );
 
-    // বক্সসমূহ
     _drawCleanPvArray(canvas, pvRect);
     _drawRealisticInverter(
       canvas,
@@ -397,10 +414,6 @@ class SolarRealisticWiringPainter extends CustomPainter {
     _drawRealisticAcLoad(canvas, acLoadRect);
     _drawNationalGridBox(canvas, gridRect);
   }
-
-  // =========================================================================
-  // 📦 কম্পোনেন্ট বক্সসমূহ আঁকার পদ্ধতি
-  // =========================================================================
 
   void _drawPvWires(Canvas canvas, Rect pv, Rect scc, Paint pPos, Paint pNeg) {
     final pathPos = Path()
@@ -447,6 +460,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
   }
 
+  // ব্যাটারি টু অফ-গ্রিড ইনভার্টার ওয়্যারিং (ইনভার্টার-এসি লোডের মতো ক্যাবলের ওপরে ফিউজ)
   void _drawBatteryToInverterWires(
     Canvas canvas,
     Rect bat,
@@ -454,23 +468,33 @@ class SolarRealisticWiringPainter extends CustomPainter {
     Paint pPos,
     Paint pNeg,
   ) {
-    final pathPos = Path()
-      ..moveTo(bat.right, bat.top + bat.height * 0.31)
-      ..lineTo(inv.left, inv.top + inv.height * 0.31);
-    final pathNeg = Path()
-      ..moveTo(bat.right, bat.top + bat.height * 0.56)
-      ..lineTo(inv.left, inv.top + inv.height * 0.56);
-    canvas.drawPath(pathPos, pPos);
-    canvas.drawPath(pathNeg, pNeg);
     final double midX = (bat.right + inv.left) / 2;
+
+    // ১. পজিটিভ ক্যাবল লাইন (সরাসরি অবিচ্ছিন্ন সংযোগ)
+    final double posY = bat.top + bat.height * 0.31;
+    final pathPos = Path()
+      ..moveTo(bat.right, posY)
+      ..lineTo(inv.left, posY);
+    canvas.drawPath(pathPos, pPos);
+
+    // ২. ফিউজ ব্যাজ (ইনভার্টার-এসি লোড স্টাইলে ক্যাবলের ওপরে স্পষ্ট অবস্থান)
     _drawBreakerBadge(
       canvas,
-      Offset(midX, bat.top + bat.height * 0.28),
+      Offset(midX, bat.top + bat.height * 0.15),
       'DC FUSE ≥ ${result.batteryFuseAmp.toInt()}A',
     );
+
+    // ৩. নেগেটিভ ক্যাবল লাইন
+    final double negY = bat.top + bat.height * 0.56;
+    final pathNeg = Path()
+      ..moveTo(bat.right, negY)
+      ..lineTo(inv.left, negY);
+    canvas.drawPath(pathNeg, pNeg);
+
+    // ক্যাবল সাইজ লেবেল (নেগেটিভ ক্যাবলের নিচে)
     _drawLabel(
       canvas,
-      Offset(midX, bat.top + bat.height * 0.68),
+      Offset(midX, negY + 18),
       '${result.batteryCableSizeMm} Cable',
     );
   }
@@ -515,6 +539,13 @@ class SolarRealisticWiringPainter extends CustomPainter {
     canvas.drawPath(pathNeg, pNeg);
   }
 
+  Color get _textColor =>
+      (isForPrint || !isDark) ? const Color(0xFF0F172A) : Colors.white;
+  Color get _textMutedColor => (isForPrint || !isDark)
+      ? const Color(0xFF334155)
+      : const Color(0xFFCBD5E1);
+
+  // --- ইনসাইড ব্লকের তথ্যাবলি (হাই-কনট্রাস্ট ও স্পষ্ট) ---
   void _drawCleanPvArray(Canvas canvas, Rect rect) {
     _drawDeviceBase(
       canvas,
@@ -524,41 +555,51 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 40),
-      '${result.totalArrayWatt.toInt()} Wp',
-      const TextStyle(
-        color: Colors.cyanAccent,
-        fontSize: 17,
+      Offset(rect.left + 12, rect.top + 34),
+      '${result.totalArrayWatt.toInt()} Wp (${params.panelPmax.toInt()}Wp each)',
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF0369A1)
+            : (isDark ? Colors.cyanAccent : const Color(0xFF0369A1)),
+        fontSize: 14.5,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 64),
-      'মোট প্যানেল: ${result.totalPanels}টি (${params.panelPmax.toInt()}W)',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 11.5,
-        fontWeight: FontWeight.bold,
-      ),
+      Offset(rect.left + 12, rect.top + 58),
+      isBangla
+          ? 'মোট প্যানেল: ${result.totalPanels}টি'
+          : 'Total Panels: ${result.totalPanels} pcs',
+      TextStyle(color: _textColor, fontSize: 12.5, fontWeight: FontWeight.bold),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 86),
-      'বিন্যাস: ${result.panelsSeries} Series × ${result.panelsParallel} Parallel',
-      const TextStyle(color: Colors.white70, fontSize: 10.5),
+      Offset(rect.left + 12, rect.top + 80),
+      isBangla
+          ? 'বিন্যাস: ${result.panelsSeries}টি সিরিজ × ${result.panelsParallel}টি প্যারালাল'
+          : 'Config: ${result.panelsSeries} Series × ${result.panelsParallel} Parallel',
+      TextStyle(color: _textColor, fontSize: 11.5, fontWeight: FontWeight.w600),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 106),
+      Offset(rect.left + 12, rect.top + 102),
       'Vmp: ${result.arrayVmp.toStringAsFixed(1)}V | Imp: ${result.arrayImp.toStringAsFixed(1)}A',
-      const TextStyle(color: Colors.white70, fontSize: 10),
+      TextStyle(
+        color: _textMutedColor,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 124),
+      Offset(rect.left + 12, rect.top + 122),
       'Voc: ${result.arrayVoc.toStringAsFixed(1)}V | Isc: ${result.arrayIsc.toStringAsFixed(1)}A',
-      const TextStyle(color: Colors.white60, fontSize: 9.5),
+      TextStyle(
+        color: _textMutedColor,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 
@@ -571,39 +612,43 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 42),
-      '${result.controllerType.toUpperCase()} Controller',
-      const TextStyle(
-        color: Colors.greenAccent,
-        fontSize: 16,
+      Offset(rect.left + 12, rect.top + 36),
+      '${result.controllerType.toUpperCase()} Technology',
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF15803D)
+            : (isDark ? Colors.greenAccent : const Color(0xFF15803D)),
+        fontSize: 14.5,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 68),
-      'ভোল্টেজ: ${result.controllerVoltage.toInt()}V DC Bus',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 11.5,
-        fontWeight: FontWeight.bold,
-      ),
+      Offset(rect.left + 12, rect.top + 60),
+      isBangla
+          ? 'ভোল্টেজ: ${result.controllerVoltage.toInt()}V DC বাস'
+          : 'Bus Voltage: ${result.controllerVoltage.toInt()}V DC',
+      TextStyle(color: _textColor, fontSize: 12, fontWeight: FontWeight.bold),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 90),
-      'রেটিং: ≥ ${result.controllerAmpere.toInt()}A',
-      const TextStyle(
-        color: Colors.white70,
-        fontSize: 11,
+      Offset(rect.left + 12, rect.top + 82),
+      isBangla
+          ? 'রেটিং ক্ষমতা: ≥ ${result.controllerAmpere.toInt()}A'
+          : 'Rating Capacity: ≥ ${result.controllerAmpere.toInt()}A',
+      TextStyle(color: _textColor, fontSize: 12, fontWeight: FontWeight.bold),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 12, rect.top + 104),
+      isBangla
+          ? 'অটো-কাট ও রিভার্স প্রটেকশন'
+          : 'Auto Cut-off & Reverse Protection',
+      TextStyle(
+        color: _textMutedColor,
+        fontSize: 10.5,
         fontWeight: FontWeight.w600,
       ),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 14, rect.top + 112),
-      isBangla ? 'সোলার ও ব্যাটারি হাব' : 'Solar & Battery Hub',
-      const TextStyle(color: Colors.white60, fontSize: 10),
     );
   }
 
@@ -615,18 +660,18 @@ class SolarRealisticWiringPainter extends CustomPainter {
       isBangla ? 'ব্যাটারি ব্যাংক' : 'Battery Bank',
     );
     canvas.drawCircle(
-      Offset(rect.left + 35, rect.top + 42),
+      Offset(rect.left + 35, rect.top + 40),
       6,
       Paint()..color = const Color(0xFFEF4444),
     );
     canvas.drawCircle(
-      Offset(rect.right - 35, rect.top + 42),
+      Offset(rect.right - 35, rect.top + 40),
       6,
-      Paint()..color = const Color(0xFF38BDF8),
+      Paint()..color = const Color(0xFF1D4ED8),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 32, rect.top + 38),
+      Offset(rect.left + 32, rect.top + 36),
       '+',
       const TextStyle(
         color: Colors.white,
@@ -636,7 +681,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.right - 38, rect.top + 38),
+      Offset(rect.right - 38, rect.top + 36),
       '-',
       const TextStyle(
         color: Colors.white,
@@ -644,27 +689,34 @@ class SolarRealisticWiringPainter extends CustomPainter {
         fontWeight: FontWeight.bold,
       ),
     );
+
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 68),
+      Offset(rect.left + 12, rect.top + 62),
       '${result.batteryCapacityAh.toStringAsFixed(0)} Ah (${params.systemVoltage.toInt()}V)',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 11.5,
+      TextStyle(color: _textColor, fontSize: 13, fontWeight: FontWeight.bold),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 12, rect.top + 84),
+      isBangla
+          ? 'মোট: ${result.totalBatteries}টি (${params.batteryCapacityAh.toInt()}Ah @ 12V)'
+          : 'Total: ${result.totalBatteries} pcs (${params.batteryCapacityAh.toInt()}Ah @ 12V)',
+      TextStyle(color: _textColor, fontSize: 11.5, fontWeight: FontWeight.bold),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 12, rect.top + 106),
+      isBangla
+          ? 'সংযোগ: ${result.batteriesSeries}টি সিরিজ × ${result.batteriesParallel}টি প্যারালাল'
+          : 'Wiring: ${result.batteriesSeries} Series × ${result.batteriesParallel} Parallel',
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFFB45309)
+            : (isDark ? Colors.amberAccent : const Color(0xFFB45309)),
+        fontSize: 11,
         fontWeight: FontWeight.bold,
       ),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 14, rect.top + 88),
-      '${result.batteriesSeries} Series × ${result.batteriesParallel} Parallel',
-      const TextStyle(color: Colors.amberAccent, fontSize: 10),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 14, rect.top + 106),
-      'মোট: ${result.totalBatteries}টি (${params.batteryCapacityAh.toInt()}Ah @ 12V)',
-      const TextStyle(color: Colors.white70, fontSize: 9.5),
     );
   }
 
@@ -674,45 +726,43 @@ class SolarRealisticWiringPainter extends CustomPainter {
     required String title,
   }) {
     _drawDeviceBase(canvas, rect, const Color(0xFF6D28D9), title);
-    final grillPaint = Paint()
-      ..color = Colors.white12
-      ..strokeWidth = 2.0;
-    for (int i = 0; i < 4; i++) {
-      canvas.drawLine(
-        Offset(rect.left + 18, rect.top + 40 + (i * 7)),
-        Offset(rect.left + 65, rect.top + 40 + (i * 7)),
-        grillPaint,
-      );
-    }
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 78),
+      Offset(rect.left + 12, rect.top + 38),
       params.systemType == SolarSystemType.gridTied
-          ? 'Grid-Synchronized'
+          ? 'Grid-Tied Sync'
           : 'Pure Sine Wave',
-      const TextStyle(
-        color: Colors.purpleAccent,
-        fontSize: 10.5,
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF6D28D9)
+            : (isDark ? Colors.purpleAccent : const Color(0xFF6D28D9)),
+        fontSize: 13,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 96),
-      'Capacity: ≥ ${params.systemType == SolarSystemType.gridTied ? (result.inverterCapacityVa / 1000).toStringAsFixed(1) : result.inverterCapacityVa.toInt()} ${params.systemType == SolarSystemType.gridTied ? "kW" : "VA"}',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 11.5,
-        fontWeight: FontWeight.bold,
-      ),
+      Offset(rect.left + 12, rect.top + 62),
+      '${isBangla ? "ক্ষমতা" : "Capacity"}: ≥ ${params.systemType == SolarSystemType.gridTied ? (result.inverterCapacityVa / 1000).toStringAsFixed(1) : result.inverterCapacityVa.toInt()} ${params.systemType == SolarSystemType.gridTied ? "kW" : "VA"}',
+      TextStyle(color: _textColor, fontSize: 12.5, fontWeight: FontWeight.bold),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 116),
+      Offset(rect.left + 12, rect.top + 84),
       params.systemType == SolarSystemType.gridTied
-          ? 'PV DC ➔ 220V 50Hz AC'
-          : 'DC ${result.inverterVoltage.toInt()}V ➔ AC 220V 50Hz',
-      const TextStyle(color: Colors.white70, fontSize: 9.5),
+          ? 'ইনপুট: সোলার স্ট্রিং ডিসি'
+          : 'ইনপুট: ${result.inverterVoltage.toInt()}V DC বাস',
+      TextStyle(color: _textColor, fontSize: 11.5, fontWeight: FontWeight.w600),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 12, rect.top + 106),
+      'আউটপুট: 220V 50Hz AC',
+      TextStyle(
+        color: _textMutedColor,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 
@@ -720,56 +770,60 @@ class SolarRealisticWiringPainter extends CustomPainter {
     _drawDeviceBase(
       canvas,
       rect,
-      const Color(0xFF8B5CF6),
+      const Color(0xFF7C3AED),
       isBangla ? 'সোলার হাইব্রিড ইনভার্টার' : 'Solar Hybrid Inverter',
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 38),
+      Offset(rect.left + 12, rect.top + 34),
       'All-in-One Smart Inverter',
-      const TextStyle(
-        color: Colors.purpleAccent,
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF7C3AED)
+            : (isDark ? Colors.purpleAccent : const Color(0xFF7C3AED)),
         fontSize: 13,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 62),
-      '• বিল্ট-ইন MPPT (≥ ${result.controllerAmpere.toInt()}A)',
-      const TextStyle(
-        color: Colors.greenAccent,
-        fontSize: 10.5,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 14, rect.top + 84),
-      '• ক্ষমতা: ≥ ${result.inverterCapacityVa.toInt()} VA',
-      const TextStyle(
-        color: Colors.white,
+      Offset(rect.left + 12, rect.top + 58),
+      isBangla
+          ? '• বিল্ট-ইন MPPT: ≥ ${result.controllerAmpere.toInt()}A'
+          : '• Built-in MPPT: ≥ ${result.controllerAmpere.toInt()}A',
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF15803D)
+            : (isDark ? Colors.greenAccent : const Color(0xFF15803D)),
         fontSize: 11.5,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 106),
-      '• ব্যাটারি বাস: ${params.systemVoltage.toInt()}V DC',
-      const TextStyle(color: Colors.amberAccent, fontSize: 10.5),
+      Offset(rect.left + 12, rect.top + 80),
+      isBangla
+          ? '• রেটিং ক্ষমতা: ≥ ${result.inverterCapacityVa.toInt()} VA'
+          : '• Capacity: ≥ ${result.inverterCapacityVa.toInt()} VA',
+      TextStyle(color: _textColor, fontSize: 11.5, fontWeight: FontWeight.bold),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 128),
-      '• আউটপুট: 220V Pure Sine Wave',
-      const TextStyle(color: Colors.white70, fontSize: 10),
+      Offset(rect.left + 12, rect.top + 102),
+      isBangla
+          ? '• ব্যাটারি বাস: ${params.systemVoltage.toInt()}V DC'
+          : '• Battery Bus: ${params.systemVoltage.toInt()}V DC',
+      TextStyle(color: _textColor, fontSize: 11, fontWeight: FontWeight.bold),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 14, rect.top + 150),
-      '• দ্বিমুখী গ্রিড ও জেনারেটর সাপোর্ট',
-      const TextStyle(color: Colors.white60, fontSize: 9.5),
+      Offset(rect.left + 12, rect.top + 122),
+      '• Output: 220V AC Pure Sine Wave',
+      TextStyle(
+        color: _textMutedColor,
+        fontSize: 10.5,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 
@@ -782,29 +836,27 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 42),
+      Offset(rect.left + 12, rect.top + 38),
       isBangla ? 'আমদানি/রপ্তানি রেকর্ডার' : 'Import/Export Meter',
-      const TextStyle(
-        color: Colors.tealAccent,
-        fontSize: 11.5,
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF0D9488)
+            : (isDark ? Colors.tealAccent : const Color(0xFF0D9488)),
+        fontSize: 12,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 68),
-      '220V / 230V 50Hz',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 11,
-        fontWeight: FontWeight.bold,
-      ),
+      Offset(rect.left + 12, rect.top + 64),
+      '220V / 230V 50Hz AC',
+      TextStyle(color: _textColor, fontSize: 11.5, fontWeight: FontWeight.bold),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 90),
-      isBangla ? 'অতিরিক্ত বিদ্যুৎ গ্রিডে পাঠায়' : 'Exports excess solar',
-      const TextStyle(color: Colors.white70, fontSize: 9),
+      Offset(rect.left + 12, rect.top + 88),
+      isBangla ? 'সোলার নেট ক্রেডিট হিসাব' : 'Solar Net Energy Accounting',
+      TextStyle(color: _textMutedColor, fontSize: 10),
     );
   }
 
@@ -817,25 +869,21 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 44),
+      Offset(rect.left + 12, rect.top + 40),
       'Utility Grid (220V AC)',
-      const TextStyle(
-        color: Colors.greenAccent,
-        fontSize: 11,
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF059669)
+            : (isDark ? Colors.greenAccent : const Color(0xFF059669)),
+        fontSize: 12,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 68),
+      Offset(rect.left + 12, rect.top + 66),
       isBangla ? 'বিদ্যুৎ ক্রয় ও বিক্রয় লাইন' : 'Net-metering grid line',
-      const TextStyle(color: Colors.white70, fontSize: 9.5),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 12, rect.top + 90),
-      isBangla ? 'সার্বক্ষণিক নিরবচ্ছিন্ন উৎস' : 'Continuous Utility Source',
-      const TextStyle(color: Colors.white60, fontSize: 9),
+      TextStyle(color: _textColor, fontSize: 11, fontWeight: FontWeight.w600),
     );
   }
 
@@ -848,25 +896,21 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 44),
-      '${params.systemVoltage.toInt()}V DC লোডসমূহ',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 10.5,
+      Offset(rect.left + 12, rect.top + 40),
+      '${params.systemVoltage.toInt()}V DC ${isBangla ? "লোডসমূহ" : "Loads"}',
+      TextStyle(color: _textColor, fontSize: 12, fontWeight: FontWeight.bold),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 12, rect.top + 64),
+      '${isBangla ? "চাহিদা" : "Demand"}: ${result.dailyDcWh.toStringAsFixed(0)} Wh/day',
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFF0E7490)
+            : (isDark ? Colors.cyanAccent : const Color(0xFF0E7490)),
+        fontSize: 11,
         fontWeight: FontWeight.bold,
       ),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 12, rect.top + 66),
-      'শক্তি: ${result.dailyDcWh.toStringAsFixed(0)} Wh/day',
-      const TextStyle(color: Colors.cyanAccent, fontSize: 9.5),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 12, rect.top + 86),
-      isBangla ? 'ডিসি ফ্যান ও এলইডি লাইট' : 'DC Fan & LED Lights',
-      const TextStyle(color: Colors.white70, fontSize: 9),
     );
   }
 
@@ -879,33 +923,61 @@ class SolarRealisticWiringPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 44),
-      '220V 50Hz AC লোড',
-      const TextStyle(
-        color: Colors.white,
-        fontSize: 10.5,
+      Offset(rect.left + 12, rect.top + 40),
+      '220V 50Hz AC ${isBangla ? "লোড" : "Loads"}',
+      TextStyle(color: _textColor, fontSize: 12, fontWeight: FontWeight.bold),
+    );
+    _drawText(
+      canvas,
+      Offset(rect.left + 12, rect.top + 64),
+      '${isBangla ? "চাহিদা" : "Demand"}: ${result.dailyAcWh.toStringAsFixed(0)} Wh/day',
+      TextStyle(
+        color: isForPrint
+            ? const Color(0xFFD97706)
+            : (isDark ? Colors.amberAccent : const Color(0xFFD97706)),
+        fontSize: 11,
         fontWeight: FontWeight.bold,
       ),
     );
-    _drawText(
-      canvas,
-      Offset(rect.left + 12, rect.top + 66),
-      'শক্তি: ${result.dailyAcWh.toStringAsFixed(0)} Wh/day',
-      const TextStyle(color: Colors.amberAccent, fontSize: 9.5),
-    );
-    _drawText(
-      canvas,
-      Offset(rect.left + 12, rect.top + 86),
-      isBangla
-          ? 'ফ্রিজ, টিভি, এসি ফ্যান ইত্যাদি'
-          : 'Fridge, TV, Home appliances',
-      const TextStyle(color: Colors.white70, fontSize: 9),
-    );
   }
 
+  // ৩ডি ড্রপ-শ্যাডো
   void _drawDeviceBase(Canvas canvas, Rect rect, Color accent, String title) {
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(14));
-    canvas.drawRRect(rrect, Paint()..color = const Color(0xFF1E293B));
+
+    if (!isForPrint) {
+      if (isDark) {
+        final whiteShadowRect = rect.shift(const Offset(0, 5));
+        final whiteShadowRrect = RRect.fromRectAndRadius(
+          whiteShadowRect,
+          const Radius.circular(14),
+        );
+        canvas.drawRRect(
+          whiteShadowRrect,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.16)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        );
+      } else {
+        final darkShadowRect = rect.shift(const Offset(0, 6));
+        final darkShadowRrect = RRect.fromRectAndRadius(
+          darkShadowRect,
+          const Radius.circular(14),
+        );
+        canvas.drawRRect(
+          darkShadowRrect,
+          Paint()
+            ..color = const Color(0xFF0F172A).withValues(alpha: 0.28)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+        );
+      }
+    }
+
+    final boxBg = isForPrint
+        ? const Color(0xFFF8FAFC)
+        : (isDark ? const Color(0xFF1E293B) : Colors.white);
+
+    canvas.drawRRect(rrect, Paint()..color = boxBg);
     canvas.drawRRect(
       rrect,
       Paint()
@@ -913,11 +985,12 @@ class SolarRealisticWiringPainter extends CustomPainter {
         ..strokeWidth = 2.0
         ..style = PaintingStyle.stroke,
     );
+
     _drawText(
       canvas,
-      Offset(rect.left + 12, rect.top + 12),
+      Offset(rect.left + 12, rect.top + 10),
       title,
-      TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.bold),
+      TextStyle(color: accent, fontSize: 12.5, fontWeight: FontWeight.bold),
     );
   }
 
@@ -926,6 +999,17 @@ class SolarRealisticWiringPainter extends CustomPainter {
     const height = 22.0;
     final rect = Rect.fromCenter(center: center, width: width, height: height);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(6));
+
+    if (!isForPrint) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          rect.shift(const Offset(0, 2)),
+          const Radius.circular(6),
+        ),
+        Paint()..color = isDark ? Colors.white24 : Colors.black38,
+      );
+    }
+
     canvas.drawRRect(rrect, Paint()..color = const Color(0xFFDC2626));
     canvas.drawRRect(
       rrect,
@@ -953,10 +1037,10 @@ class SolarRealisticWiringPainter extends CustomPainter {
   void _drawLabel(Canvas canvas, Offset center, String text) {
     final textSpan = TextSpan(
       text: text,
-      style: const TextStyle(
-        color: Colors.white70,
-        fontSize: 9.5,
-        fontWeight: FontWeight.w500,
+      style: TextStyle(
+        color: _textMutedColor,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
       ),
     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)
@@ -965,6 +1049,78 @@ class SolarRealisticWiringPainter extends CustomPainter {
       canvas,
       Offset(center.dx - tp.width / 2, center.dy - tp.height / 2),
     );
+  }
+
+  // =========================================================================
+  // 🏷️ ক্যানভাসে স্থায়ী ক্যাবল ওয়্যারিং লেজেন্ড (পিডিএফ প্রিন্টেও আসবে)
+  // =========================================================================
+  void _drawCanvasCableLegend(Canvas canvas, double w, double h) {
+    // h * 0.90 থেকে বাড়িয়ে h * 0.925 করা হলো, ফলে বারটি আরেকটু নিচে নেমে যাবে
+    final legendRect = Rect.fromLTWH(w * 0.05, h * 0.925, w * 0.90, 38);
+    final rrect = RRect.fromRectAndRadius(
+      legendRect,
+      const Radius.circular(10),
+    );
+
+    final legendBg = isForPrint
+        ? const Color(0xFFF1F5F9)
+        : (isDark ? const Color(0xFF1E293B) : Colors.white);
+
+    canvas.drawRRect(rrect, Paint()..color = legendBg);
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = isForPrint
+            ? const Color(0xFF94A3B8)
+            : (isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1))
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke,
+    );
+
+    double curX = legendRect.left + 20;
+    final double midY = legendRect.top + 21;
+
+    void drawItem(Color color, String label) {
+      canvas.drawCircle(Offset(curX + 6, midY), 5.5, Paint()..color = color);
+      curX += 16;
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: _textColor,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(curX, midY - tp.height / 2));
+      curX += tp.width + 24;
+    }
+
+    drawItem(
+      const Color(0xFFEF4444),
+      isBangla ? 'ডিসি পজিটিভ (+)' : 'DC Positive (+)',
+    );
+    drawItem(
+      const Color(0xFF1D4ED8),
+      isBangla ? 'ডিসি নেগেটিভ (-)' : 'DC Negative (-)',
+    );
+
+    if (result.hasAcLoad || params.systemType == SolarSystemType.gridTied) {
+      drawItem(
+        const Color(0xFFD97706),
+        isBangla ? 'এসি ফেজ (L)' : 'AC Live (L)',
+      );
+      drawItem(
+        const Color(0xFF06B6D4),
+        isBangla ? 'এসি নিউট্রাল (N)' : 'AC Neutral (N)',
+      );
+    }
+
+    if (params.systemType != SolarSystemType.offGrid) {
+      drawItem(const Color(0xFF059669), isBangla ? 'গ্রিড লাইন' : 'Grid Line');
+    }
   }
 
   void _drawText(Canvas canvas, Offset offset, String text, TextStyle style) {
@@ -979,7 +1135,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ২. সম্পূর্ণ ওভারল্যাপমুক্ত পরিষ্কার সোলার প্যানেল ড্রয়িং পেইন্টার
+// ২. সোলার প্যানেল ড্রয়িং পেইন্টার
 class CleanPanelVisualPainter extends CustomPainter {
   final int pvs;
   final int pvp;
@@ -998,11 +1154,11 @@ class CleanPanelVisualPainter extends CustomPainter {
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
     final pNeg = Paint()
-      ..color = const Color(0xFF38BDF8)
+      ..color = const Color(0xFF1D4ED8)
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
     final pJumper = Paint()
-      ..color = Colors.amberAccent
+      ..color = const Color(0xFFD97706)
       ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
 
@@ -1038,7 +1194,7 @@ class CleanPanelVisualPainter extends CustomPainter {
         Offset(pRect.right - 35, pRect.bottom + 70),
         'PV (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1058,7 +1214,11 @@ class CleanPanelVisualPainter extends CustomPainter {
         canvas,
         Offset((p1.right + p2.left) / 2 - 40, p1.bottom + 12),
         isBangla ? 'সিরিজ জাম্পার (+/-)' : 'Series Wire',
-        const TextStyle(color: Colors.amberAccent, fontSize: 10),
+        const TextStyle(
+          color: Color(0xFFD97706),
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       );
       canvas.drawLine(
         Offset(p1.left + 25, p1.bottom),
@@ -1085,7 +1245,7 @@ class CleanPanelVisualPainter extends CustomPainter {
         Offset(p2.right - 42, p2.bottom + 80),
         'Array (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1132,7 +1292,7 @@ class CleanPanelVisualPainter extends CustomPainter {
         Offset(p2.right - 42, p2.bottom + 90),
         'Array (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1197,7 +1357,7 @@ class CleanPanelVisualPainter extends CustomPainter {
         Offset(p12.right + 5, p22.bottom + 80),
         'Array (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1254,7 +1414,7 @@ class CleanPanelVisualPainter extends CustomPainter {
       Offset(r.right - 24, r.bottom - 20),
       '-',
       const TextStyle(
-        color: Colors.cyanAccent,
+        color: Color(0xFF38BDF8),
         fontSize: 15,
         fontWeight: FontWeight.bold,
       ),
@@ -1273,7 +1433,7 @@ class CleanPanelVisualPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ৩. ওভারল্যাপমুক্ত পরিষ্কার ব্যাটারি ড্রয়িং পেইন্টার
+// ৩. ব্যাটারি ড্রয়িং পেইন্টার
 class CleanBatteryVisualPainter extends CustomPainter {
   final int bs;
   final int bp;
@@ -1294,11 +1454,11 @@ class CleanBatteryVisualPainter extends CustomPainter {
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
     final pNeg = Paint()
-      ..color = const Color(0xFF38BDF8)
+      ..color = const Color(0xFF1D4ED8)
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
     final pJumper = Paint()
-      ..color = Colors.amberAccent
+      ..color = const Color(0xFFD97706)
       ..strokeWidth = 3.2
       ..style = PaintingStyle.stroke;
 
@@ -1334,7 +1494,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
         Offset(bRect.right - 35, bRect.top - 55),
         '12V (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1354,7 +1514,11 @@ class CleanBatteryVisualPainter extends CustomPainter {
         canvas,
         Offset((b1.right + b2.left) / 2 - 40, b1.top - 40),
         isBangla ? 'সিরিজ জাম্পার' : 'Series Jumper',
-        const TextStyle(color: Colors.amberAccent, fontSize: 10),
+        const TextStyle(
+          color: Color(0xFFD97706),
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       );
       canvas.drawLine(
         Offset(b1.left + 25, b1.top),
@@ -1381,7 +1545,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
         Offset(b2.right - 42, b2.top - 70),
         '$sysVolt\V (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1428,7 +1592,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
         Offset(b2.right - 42, b2.top - 75),
         '12V (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1489,7 +1653,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
         Offset(size.width * 0.78, (b12.top + b22.top) / 2 + 20),
         '$sysVolt\V (-)',
         const TextStyle(
-          color: Colors.cyanAccent,
+          color: Color(0xFF1D4ED8),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -1526,7 +1690,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(r.right - 20, r.top + 10),
       6,
-      Paint()..color = Colors.cyanAccent,
+      Paint()..color = const Color(0xFF1D4ED8),
     );
     _drawText(
       canvas,
@@ -1542,6 +1706,9 @@ class CleanBatteryVisualPainter extends CustomPainter {
     );
   }
 
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+
   void _drawText(Canvas canvas, Offset offset, String text, TextStyle style) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
@@ -1549,7 +1716,4 @@ class CleanBatteryVisualPainter extends CustomPainter {
     )..layout();
     tp.paint(canvas, offset);
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

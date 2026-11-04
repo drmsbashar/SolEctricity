@@ -1,10 +1,10 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../constants/app_colors.dart';
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
 import '../services/pdf_report_service.dart';
@@ -30,7 +30,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
   late bool _isBangla;
   final TransformationController _mainCanvasController =
       TransformationController();
-  final GlobalKey _diagramCanvasKey = GlobalKey(); // 👈 ক্যানভাস ক্যাপচার কী
+  final GlobalKey _diagramCanvasKey = GlobalKey();
   bool _isLandscape = false;
   bool _isExporting = false;
 
@@ -43,7 +43,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _isBangla = widget.isBangla;
   }
 
-  // 💡 অরিয়েন্টেশন পরিবর্তন মেথড (এখানে @override থাকবে না)
   Future<void> _toggleOrientation() async {
     final nextIsLandscape = !_isLandscape;
     if (nextIsLandscape) {
@@ -64,7 +63,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     }
   }
 
-  // 💡 স্ক্রিন থেকে ব্যাক করলে আগের মতো স্বাভাবিক পোর্ট্রেট/ল্যান্ডস্কেপ ফিরিয়ে দেওয়ার মেথড
   @override
   void dispose() {
     SystemChrome.setPreferredOrientations([
@@ -80,16 +78,13 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _mainCanvasController.value = Matrix4.identity();
   }
 
-  // 📸 ডায়াগ্রাম ক্যানভাসকে ছবিতে ক্যাপচার করার মেথড
   Future<Uint8List?> _captureDiagramPng() async {
     try {
       final boundary =
           _diagramCanvasKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
       if (boundary == null) return null;
-      final image = await boundary.toImage(
-        pixelRatio: 2.0,
-      ); // 2x শার্প রেজোলিউশন
+      final image = await boundary.toImage(pixelRatio: 2.5);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       return byteData?.buffer.asUint8List();
     } catch (e) {
@@ -99,23 +94,55 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
 
   Future<void> _handlePdfExport() async {
     setState(() => _isExporting = true);
-    final diagramBytes = await _captureDiagramPng();
-    if (mounted) {
-      setState(() => _isExporting = false);
-      await PdfReportService.shareOrPrintReport(
-        widget.result,
-        widget.params,
-        _isBangla,
-        diagramImageBytes: diagramBytes,
+
+    try {
+      // প্রিন্টের জন্য সাদা ব্যাকগ্রাউন্ড ও পূর্ণাঙ্গ তথ্যসহ ডায়াগ্রামের হাই-রেজোলিউশন ইমেজ তৈরি
+      final recorder = ui.PictureRecorder();
+      final printCanvas = Canvas(
+        recorder,
+        const Rect.fromLTWH(0, 0, vWidth, vHeight),
       );
+
+      final printPainter = SolarRealisticWiringPainter(
+        result: widget.result,
+        params: widget.params,
+        isBangla: _isBangla,
+        isDark: false,
+        isForPrint: true, // সাদা ব্যাকগ্রাউন্ড ও ক্যাবল লিজেন্ডসহ
+      );
+
+      printPainter.paint(printCanvas, const Size(vWidth, vHeight));
+
+      final picture = recorder.endRecording();
+      // ৩ গুণ রেজোলিউশন যাতে ব্লকের ভেতরের প্রতিটি টেক্সট ক্রিস্টাল ক্লিয়ার আসে
+      final img = await picture.toImage(
+        (vWidth * 2.5).toInt(),
+        (vHeight * 2.5).toInt(),
+      );
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      final diagramBytes = byteData?.buffer.asUint8List();
+
+      if (mounted) {
+        setState(() => _isExporting = false);
+        await PdfReportService.shareOrPrintReport(
+          widget.result,
+          widget.params,
+          _isBangla,
+          diagramImageBytes: diagramBytes,
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isExporting = false);
     }
   }
 
   void _showDetailModal({
     required String title,
-    required Widget content,
+    required Widget Function(bool isDark) contentBuilder,
     Color headerColor = const Color(0xFF10B981),
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -123,17 +150,21 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: isDark
+              ? const Color(0xFF0B1120)
+              : const Color(0xFFF1F5F9),
           appBar: AppBar(
-            backgroundColor: const Color(0xFF1E293B),
-            elevation: 0,
+            backgroundColor: isDark
+                ? const Color(0xFF1E293B)
+                : AppColors.primaryGreen,
+            elevation: 2,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
             title: Row(
               children: [
-                Icon(Icons.hub_outlined, color: headerColor, size: 20),
+                Icon(Icons.hub_rounded, color: headerColor, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -148,7 +179,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
-          body: SafeArea(child: content),
+          body: SafeArea(child: contentBuilder(isDark)),
         );
       },
     );
@@ -183,25 +214,36 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'সোলার প্যানেল বাস্তব সংযোগ চিত্র'
           : 'Solar PV Wiring Blueprint',
       headerColor: const Color(0xFF0284C7),
-      content: Column(
+      contentBuilder: (isDark) => Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: const Color(0xFF131D31),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF131D31) : const Color(0xFFE2E8F0),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFCBD5E1),
+                ),
+              ),
+            ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.solar_power_rounded,
-                  color: Colors.cyanAccent,
+                  color: isDark ? Colors.cyanAccent : const Color(0xFF0284C7),
                   size: 20,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     '$modeText (${result.totalPanels} ${_isBangla ? "টি" : "Panels"})',
-                    style: const TextStyle(
-                      color: Colors.cyanAccent,
-                      fontSize: 13,
+                    style: TextStyle(
+                      color: isDark
+                          ? Colors.cyanAccent
+                          : const Color(0xFF0369A1),
+                      fontSize: 13.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -211,7 +253,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               child: Center(
                 child: FittedBox(
                   fit: BoxFit.contain,
@@ -220,9 +262,23 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                     height: canvasHeight,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF090E17),
+                      color: isDark ? const Color(0xFF090E17) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF334155)
+                            : const Color(0xFFCBD5E1),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.5 : 0.08,
+                          ),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: CustomPaint(
                       painter: CleanPanelVisualPainter(
@@ -240,6 +296,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             isSeries: pvs > 1,
             isParallel: pvp > 1,
             componentType: 'panel',
+            isDark: isDark,
           ),
         ],
       ),
@@ -275,25 +332,36 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'ব্যাটারি ব্যাংক বাস্তব সংযোগ চিত্র'
           : 'Battery Bank Wiring Blueprint',
       headerColor: const Color(0xFFEAB308),
-      content: Column(
+      contentBuilder: (isDark) => Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: const Color(0xFF131D31),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF131D31) : const Color(0xFFE2E8F0),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFCBD5E1),
+                ),
+              ),
+            ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.battery_charging_full_rounded,
-                  color: Colors.amberAccent,
+                  color: isDark ? Colors.amberAccent : const Color(0xFFB45309),
                   size: 20,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     '$modeText (${result.totalBatteries} ${_isBangla ? "টি" : "Units"})',
-                    style: const TextStyle(
-                      color: Colors.amberAccent,
-                      fontSize: 13,
+                    style: TextStyle(
+                      color: isDark
+                          ? Colors.amberAccent
+                          : const Color(0xFFB45309),
+                      fontSize: 13.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -303,7 +371,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               child: Center(
                 child: FittedBox(
                   fit: BoxFit.contain,
@@ -312,9 +380,23 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                     height: canvasHeight,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF090E17),
+                      color: isDark ? const Color(0xFF090E17) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF334155)
+                            : const Color(0xFFCBD5E1),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.5 : 0.08,
+                          ),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: CustomPaint(
                       painter: CleanBatteryVisualPainter(
@@ -333,6 +415,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             isSeries: bs > 1,
             isParallel: bp > 1,
             componentType: 'battery',
+            isDark: isDark,
           ),
         ],
       ),
@@ -343,6 +426,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     required bool isSeries,
     required bool isParallel,
     required String componentType,
+    required bool isDark,
   }) {
     String text = '';
     if (!isSeries && !isParallel) {
@@ -367,12 +451,24 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      color: const Color(0xFF1E293B),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+          ),
+        ),
+      ),
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white70, fontSize: 12),
+        style: TextStyle(
+          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          height: 1.45,
+        ),
       ),
     );
   }
@@ -383,61 +479,73 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'চার্জ কন্ট্রোলার সংযোগ নির্দেশিকা'
           : 'Charge Controller Wiring Ports',
       headerColor: const Color(0xFF16A34A),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFDC2626).withAlpha(30),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFDC2626)),
+                color: isDark
+                    ? const Color(0xFFDC2626).withValues(alpha: 0.15)
+                    : const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFFDC2626)
+                      : const Color(0xFFFCA5A5),
+                  width: 1.2,
+                ),
               ),
               child: Row(
                 children: [
                   const Icon(
                     Icons.warning_amber_rounded,
                     color: Color(0xFFEF4444),
+                    size: 24,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       _isBangla
                           ? 'সতর্কতা: সংযোগ দেওয়ার সময় প্রথমে ব্যাটারি সংযুক্ত করুন, তারপর সোলার প্যানেল! খোলার সময় আগে সোলার খুলুন, তারপর ব্যাটারি।'
                           : 'Golden Rule: Always connect Battery FIRST, then Solar Panels! When disconnecting, remove Solar FIRST.',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF991B1B),
                         fontSize: 12.5,
                         fontWeight: FontWeight.bold,
+                        height: 1.4,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             _buildPortRow(
               'Port 1 & 2',
               _isBangla
                   ? 'সোলার প্যানেল ইনপুট (+ ও -)'
                   : 'Solar Array Input (+ & -)',
-              Colors.cyanAccent,
+              const Color(0xFF0284C7),
+              isDark,
             ),
             _buildPortRow(
               'Port 3 & 4',
               _isBangla
                   ? 'ব্যাটারি ব্যাংক টার্মিনাল (+ ও -)'
                   : 'Battery Bank (+ & -)',
-              Colors.amberAccent,
+              const Color(0xFFD97706),
+              isDark,
             ),
             _buildPortRow(
               'Port 5 & 6',
               _isBangla
                   ? '১২V ডিসি লোড টার্মিনাল (+ ও -)'
                   : 'DC Load Terminal (+ & -)',
-              Colors.greenAccent,
+              const Color(0xFF16A34A),
+              isDark,
             ),
           ],
         ),
@@ -449,20 +557,31 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'ইনভার্টার সংযোগ নির্দেশিকা' : 'Inverter Wiring Guide',
       headerColor: const Color(0xFF8B5CF6),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          widget.params.systemType == SolarSystemType.gridTied
-              ? (_isBangla
-                    ? '• অন-গ্রিড স্ট্রিং ইনভার্টার সোলার ডিসি ভোল্টেজকে সিনক্রোনাইজ করে ২২০V এসিতে রূপান্তর করে।\n• এর আউটপুট সরাসরি নেট-মিটার হয়ে মূল ডিস্ট্রিবিউশন বোর্ডে যুক্ত হয়।\n• গ্রিড অফ থাকলে নিরাপত্তা স্বার্থে এটি স্বয়ংক্রিয়ভাবে বন্ধ (Anti-Islanding) হয়ে যায়।'
-                    : '• Grid-Tied Inverter synchronizes solar DC power to 220V grid AC.\n• Output directly connects to Net-Meter.\n• Features Anti-Islanding safety protection.')
-              : (_isBangla
-                    ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n• ব্যাটারির পজিটিভ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
-                    : '• Inverter DC input connects directly to the Battery Bank (NEVER into charge controller DC load port!).\n• Install a ≥ ${widget.result.batteryFuseAmp.toInt()}A DC Fuse on the battery positive line.\n• AC 220V output routes to your home AC loads.'),
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            widget.params.systemType == SolarSystemType.gridTied
+                ? (_isBangla
+                      ? '• অন-গ্রিড স্ট্রিং ইনভার্টার সোলার ডিসি ভোল্টেজকে সিনক্রোনাইজ করে ২২০V এসিতে রূপান্তর করে।\n\n• এর আউটপুট সরাসরি নেট-মিটার হয়ে মূল ডিস্ট্রিবিউশন বোর্ডে যুক্ত হয়।\n\n• গ্রিড অফ থাকলে নিরাপত্তা স্বার্থে এটি স্বয়ংক্রিয়ভাবে বন্ধ (Anti-Islanding) হয়ে যায়।'
+                      : '• Grid-Tied Inverter synchronizes solar DC power to 220V grid AC.\n\n• Output directly connects to Net-Meter.\n\n• Features Anti-Islanding safety protection.')
+                : (_isBangla
+                      ? '• ইনভার্টারের ডিসি ইনপুট সরাসরি ব্যাটারি ব্যাংকে যুক্ত হবে (কন্ট্রোলারের ডিসি লোড পোর্টে কখনো ইনভার্টার লাগাবেন না)।\n\n• ব্যাটারির পজিটিভ তারের সাথে ≥ ${widget.result.batteryFuseAmp.toInt()}A ডিসি ফিউজ লাগাতে হবে।\n\n• আউটপুট সকেট থেকে ঘরের ২২০V এসি লোড বক্সে সংযোগ যাবে।'
+                      : '• Inverter DC input connects directly to the Battery Bank (NEVER into charge controller DC load port!).\n\n• Install a ≥ ${widget.result.batteryFuseAmp.toInt()}A DC Fuse on the battery positive line.\n\n• AC 220V output routes to your home AC loads.'),
+            style: TextStyle(
+              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+              fontSize: 13.5,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -475,16 +594,27 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'হাইব্রিড ইনভার্টার নির্দেশিকা'
           : 'Hybrid Inverter Guide',
       headerColor: const Color(0xFF8B5CF6),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          _isBangla
-              ? '• এটি একটি অল-ইন-ওয়ান ইনভার্টার যার ভেতরে MPPT চার্জ কন্ট্রোলার বিল্ট-ইন থাকে।\n• সোলার প্যানেল এবং ব্যাটারি ব্যাংক উভয়ই সরাসরি ইনভার্টারের নির্ধারিত টার্মিনালে সংযুক্ত হয়।\n• একই সাথে এটি জাতীয় গ্রিডের সাথে যুক্ত হয়ে স্বয়ংক্রিয়ভাবে ব্যাকআপ পরিচালনা করে।'
-              : '• All-in-One smart unit with integrated MPPT charge controller.\n• Solar array and battery bank connect directly to the inverter.\n• Manages solar, battery and grid inputs simultaneously.',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            _isBangla
+                ? '• এটি একটি অল-ইন-ওয়ান ইনভার্টার যার ভেতরে MPPT চার্জ কন্ট্রোলার বিল্ট-ইন থাকে।\n\n• সোলার প্যানেল এবং ব্যাটারি ব্যাংক উভয়ই সরাসরি ইনভার্টারের নির্ধারিত টার্মিনালে সংযুক্ত হয়।\n\n• একই সাথে এটি জাতীয় গ্রিডের সাথে যুক্ত হয়ে স্বয়ংক্রিয়ভাবে ব্যাকআপ পরিচালনা করে।'
+                : '• All-in-One smart unit with integrated MPPT charge controller.\n\n• Solar array and battery bank connect directly to the inverter.\n\n• Manages solar, battery and grid inputs simultaneously.',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+              fontSize: 13.5,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -497,16 +627,27 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'দ্বিমুখী নেট মিটার নির্দেশিকা'
           : 'Bi-directional Net Meter',
       headerColor: const Color(0xFF0D9488),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          _isBangla
-              ? '• নেট মিটারিং একটি বিশেষ দ্বিমুখী মিটার যা বিদ্যুৎ আমদানি (Import) এবং রপ্তানি (Export) উভয় হিসাব রাখে।\n• দিনের বেলা উৎপাদিত বাড়তি সোলার বিদ্যুৎ জাতীয় গ্রিডে রপ্তানি হয় এবং মাসের শেষে মোট বিল সমন্বয় করা হয়।'
-              : '• Bi-directional meter records both electricity imported from and exported to the grid.\n• Excess solar electricity is sold back to the utility grid.',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            _isBangla
+                ? '• নেট মিটারিং একটি বিশেষ দ্বিমুখী মিটার যা বিদ্যুৎ আমদানি (Import) এবং রপ্তানি (Export) উভয় হিসাব রাখে।\n\n• দিনের বেলা উৎপাদিত বাড়তি সোলার বিদ্যুৎ জাতীয় গ্রিডে রপ্তানি হয় এবং মাসের শেষে মোট বিল সমন্বয় করা হয়।'
+                : '• Bi-directional meter records both electricity imported from and exported to the grid.\n\n• Excess solar electricity is sold back to the utility grid.',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+              fontSize: 13.5,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -517,16 +658,27 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'জাতীয় পাওয়ার গ্রিড সংযোগ' : 'National Utility Grid',
       headerColor: const Color(0xFF10B981),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          _isBangla
-              ? '• জাতীয় গ্রিড ২৪ ঘণ্টা প্রধান শক্তি ভাণ্ডার হিসেবে কাজ করে।\n• অন-গ্রিড এবং হাইব্রিড সিস্টেমে সোলারের ঘাটতি সময়ে গ্রিড থেকে স্বয়ংক্রিয়ভাবে শক্তি সরবরাহ বজায় থাকে।'
-              : '• 24/7 main utility grid source providing continuous power supply and absorbing excess solar power.',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            _isBangla
+                ? '• জাতীয় গ্রিড ২৪ ঘণ্টা প্রধান শক্তি ভাণ্ডার হিসেবে কাজ করে।\n\n• অন-গ্রিড এবং হাইব্রিড সিস্টেমে সোলারের ঘাটতি সময়ে গ্রিড থেকে স্বয়ংক্রিয়ভাবে শক্তি সরবরাহ বজায় থাকে।'
+                : '• 24/7 main utility grid source providing continuous power supply and absorbing excess solar power.',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+              fontSize: 13.5,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -537,16 +689,27 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'ডিসি লোড সংযোগ নির্দেশিকা' : 'DC Loads Wiring Guide',
       headerColor: const Color(0xFF06B6D4),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          _isBangla
-              ? '• ১২V ডিসি লোডসমূহ (যেমন: ডিসি ফ্যান, এলইডি লাইট) সরাসরি চার্জ কন্ট্রোলারের ডিসি লোড পোর্ট থেকে চলবে।\n• এখানে ব্যাটারির ওভার-ডিসচার্জ প্রোটেকশন কন্ট্রোলার নিজেই নিয়ন্ত্রণ করে।'
-              : '• DC loads (12V Fan, LED) run from Controller DC load port.\n• Battery low-voltage protection is managed directly by the controller.',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            _isBangla
+                ? '• ১২V ডিসি লোডসমূহ (যেমন: ডিসি ফ্যান, এলইডি লাইট) সরাসরি চার্জ কন্ট্রোলারের ডিসি লোড পোর্ট থেকে চলবে।\n\n• এখানে ব্যাটারির ওভার-ডিসচার্জ প্রোটেকশন কন্ট্রোলার নিজেই নিয়ন্ত্রণ করে।'
+                : '• DC loads (12V Fan, LED) run from Controller DC load port.\n\n• Battery low-voltage protection is managed directly by the controller.',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+              fontSize: 13.5,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -557,38 +720,59 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'এসি লোড সংযোগ নির্দেশিকা' : 'AC Loads Wiring Guide',
       headerColor: const Color(0xFFD97706),
-      content: Padding(
+      contentBuilder: (isDark) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          _isBangla
-              ? '• এসি লোডসমূহ (২২০V ফ্রিজ, সাধারণ টিভি, ফ্যান ইত্যাদি) ইনভার্টারের আউটপুট থেকে এসি ব্রেকার (AC MCB) হয়ে চলবে।\n• বিশুদ্ধ সাইন ওয়েভ লাইন সাধারণ বাসাবাড়ির সব যন্ত্রপাতির জন্য নিরাপদ।'
-              : '• AC loads (220V Fridge, TV, AC Fan) run from Inverter AC output breaker.\n• Pure Sine Wave line ensures safe operation of sensitive home appliances.',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            height: 1.5,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            ),
+          ),
+          child: Text(
+            _isBangla
+                ? '• এসি লোডসমূহ (২২০V ফ্রিজ, সাধারণ টিভি, ফ্যান ইত্যাদি) ইনভার্টারের আউটপুট থেকে এসি ব্রেকার (AC MCB) হয়ে চলবে।\n\n• বিশুদ্ধ সাইন ওয়েভ লাইন সাধারণ বাসাবাড়ির সব যন্ত্রপাতির জন্য নিরাপদ।'
+                : '• AC loads (220V Fridge, TV, AC Fan) run from Inverter AC output breaker.\n\n• Pure Sine Wave line ensures safe operation of sensitive home appliances.',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
+              fontSize: 13.5,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPortRow(String port, String label, Color color) {
+  Widget _buildPortRow(String port, String label, Color color, bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withAlpha(50)),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withAlpha(30),
-              borderRadius: BorderRadius.circular(6),
+              color: color.withValues(alpha: isDark ? 0.25 : 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withValues(alpha: 0.5)),
             ),
             child: Text(
               port,
@@ -599,10 +783,16 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -611,17 +801,14 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final result = widget.result;
     final params = widget.params;
     final isGridTied = params.systemType == SolarSystemType.gridTied;
     final isHybrid = params.systemType == SolarSystemType.hybrid;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0F1D),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           _isBangla ? 'সিস্টেম ওয়্যারিং ডায়াগ্রাম' : 'System Wiring Diagram',
           style: const TextStyle(
@@ -649,7 +836,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
             ),
             onPressed: _resetZoom,
           ),
-          // 📄 ডায়াগ্রামের ছবিসহ পূর্ণাঙ্গ রিপোর্ট এক্সপোর্ট বাটন
           IconButton(
             tooltip: _isBangla
                 ? 'ডায়াগ্রামসহ রিপোর্ট শেয়ার'
@@ -666,20 +852,31 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                 : const Icon(Icons.share_rounded, color: Colors.white),
             onPressed: _isExporting ? null : _handlePdfExport,
           ),
-          IconButton(
-            onPressed: () => setState(() => _isBangla = !_isBangla),
-            icon: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(30),
-                borderRadius: BorderRadius.circular(12),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1.0,
               ),
-              child: Text(
+            ),
+            child: TextButton.icon(
+              onPressed: () => setState(() => _isBangla = !_isBangla),
+              icon: const Icon(
+                Icons.translate_rounded,
+                color: Colors.white,
+                size: 14,
+              ),
+              label: Text(
                 _isBangla ? 'ENG' : 'বাংলা',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: 11.5,
                 ),
               ),
             ),
@@ -693,283 +890,319 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final offGridPvRect = Rect.fromLTWH(
-                vWidth * 0.025,
-                vHeight * 0.10,
-                vWidth * 0.19,
-                vHeight * 0.32,
-              );
-              final offGridControllerRect = Rect.fromLTWH(
-                vWidth * 0.31,
-                vHeight * 0.11,
-                vWidth * 0.19,
-                vHeight * 0.28,
-              );
-              final offGridBatteryRect = Rect.fromLTWH(
-                vWidth * 0.31,
-                vHeight * 0.63,
-                vWidth * 0.19,
-                vHeight * 0.28,
-              );
-              final offGridInverterRect = Rect.fromLTWH(
-                vWidth * 0.57,
-                vHeight * 0.63,
-                vWidth * 0.18,
-                vHeight * 0.28,
-              );
-              final offGridDcLoadRect = Rect.fromLTWH(
-                vWidth * 0.60,
-                vHeight * 0.11,
-                vWidth * 0.16,
-                vHeight * 0.25,
-              );
-              final offGridAcLoadRect = Rect.fromLTWH(
-                vWidth * 0.83,
-                vHeight * 0.63,
-                vWidth * 0.15,
-                vHeight * 0.28,
-              );
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? [
+                    const Color(0xFF030712),
+                    const Color(0xFF0B1120),
+                    const Color(0xFF020617),
+                  ]
+                : [
+                    const Color(0xFFDCECE4),
+                    const Color(0xFFEDF4F0),
+                    const Color(0xFFE2EBE6),
+                  ],
+            stops: const [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final offGridPvRect = Rect.fromLTWH(
+                  vWidth * 0.025,
+                  vHeight * 0.10,
+                  vWidth * 0.19,
+                  vHeight * 0.32,
+                );
+                final offGridControllerRect = Rect.fromLTWH(
+                  vWidth * 0.31,
+                  vHeight * 0.11,
+                  vWidth * 0.19,
+                  vHeight * 0.28,
+                );
+                final offGridBatteryRect = Rect.fromLTWH(
+                  vWidth * 0.31,
+                  vHeight * 0.63,
+                  vWidth * 0.19,
+                  vHeight * 0.28,
+                );
+                final offGridInverterRect = Rect.fromLTWH(
+                  vWidth * 0.57,
+                  vHeight * 0.63,
+                  vWidth * 0.18,
+                  vHeight * 0.28,
+                );
+                final offGridDcLoadRect = Rect.fromLTWH(
+                  vWidth * 0.60,
+                  vHeight * 0.11,
+                  vWidth * 0.16,
+                  vHeight * 0.25,
+                );
+                final offGridAcLoadRect = Rect.fromLTWH(
+                  vWidth * 0.83,
+                  vHeight * 0.63,
+                  vWidth * 0.15,
+                  vHeight * 0.28,
+                );
 
-              final hybridPvRect = Rect.fromLTWH(
-                vWidth * 0.025,
-                vHeight * 0.11,
-                vWidth * 0.19,
-                vHeight * 0.32,
-              );
-              final hybridBatteryRect = Rect.fromLTWH(
-                vWidth * 0.025,
-                vHeight * 0.58,
-                vWidth * 0.19,
-                vHeight * 0.28,
-              );
-              final hybridInvRect = Rect.fromLTWH(
-                vWidth * 0.33,
-                vHeight * 0.24,
-                vWidth * 0.23,
-                vHeight * 0.50,
-              );
-              final hybridAcLoadRect = Rect.fromLTWH(
-                vWidth * 0.68,
-                vHeight * 0.13,
-                vWidth * 0.18,
-                vHeight * 0.26,
-              );
-              final hybridGridRect = Rect.fromLTWH(
-                vWidth * 0.68,
-                vHeight * 0.55,
-                vWidth * 0.18,
-                vHeight * 0.26,
-              );
+                final hybridPvRect = Rect.fromLTWH(
+                  vWidth * 0.025,
+                  vHeight * 0.11,
+                  vWidth * 0.19,
+                  vHeight * 0.32,
+                );
+                final hybridBatteryRect = Rect.fromLTWH(
+                  vWidth * 0.025,
+                  vHeight * 0.58,
+                  vWidth * 0.19,
+                  vHeight * 0.28,
+                );
+                final hybridInvRect = Rect.fromLTWH(
+                  vWidth * 0.33,
+                  vHeight * 0.24,
+                  vWidth * 0.23,
+                  vHeight * 0.50,
+                );
+                final hybridAcLoadRect = Rect.fromLTWH(
+                  vWidth * 0.68,
+                  vHeight * 0.13,
+                  vWidth * 0.18,
+                  vHeight * 0.26,
+                );
+                final hybridGridRect = Rect.fromLTWH(
+                  vWidth * 0.68,
+                  vHeight * 0.55,
+                  vWidth * 0.18,
+                  vHeight * 0.26,
+                );
 
-              final gridTiedPvRect = Rect.fromLTWH(
-                vWidth * 0.025,
-                vHeight * 0.28,
-                vWidth * 0.19,
-                vHeight * 0.35,
-              );
-              final gridTiedInvRect = Rect.fromLTWH(
-                vWidth * 0.29,
-                vHeight * 0.28,
-                vWidth * 0.19,
-                vHeight * 0.35,
-              );
-              final gridTiedMeterRect = Rect.fromLTWH(
-                vWidth * 0.55,
-                vHeight * 0.30,
-                vWidth * 0.17,
-                vHeight * 0.30,
-              );
-              final gridTiedAcLoadRect = Rect.fromLTWH(
-                vWidth * 0.79,
-                vHeight * 0.12,
-                vWidth * 0.18,
-                vHeight * 0.26,
-              );
-              final gridTiedGridRect = Rect.fromLTWH(
-                vWidth * 0.79,
-                vHeight * 0.53,
-                vWidth * 0.18,
-                vHeight * 0.26,
-              );
+                final gridTiedPvRect = Rect.fromLTWH(
+                  vWidth * 0.025,
+                  vHeight * 0.28,
+                  vWidth * 0.19,
+                  vHeight * 0.35,
+                );
+                final gridTiedInvRect = Rect.fromLTWH(
+                  vWidth * 0.29,
+                  vHeight * 0.28,
+                  vWidth * 0.19,
+                  vHeight * 0.35,
+                );
+                final gridTiedMeterRect = Rect.fromLTWH(
+                  vWidth * 0.55,
+                  vHeight * 0.30,
+                  vWidth * 0.17,
+                  vHeight * 0.30,
+                );
+                final gridTiedAcLoadRect = Rect.fromLTWH(
+                  vWidth * 0.79,
+                  vHeight * 0.12,
+                  vWidth * 0.18,
+                  vHeight * 0.26,
+                );
+                final gridTiedGridRect = Rect.fromLTWH(
+                  vWidth * 0.79,
+                  vHeight * 0.53,
+                  vWidth * 0.18,
+                  vHeight * 0.26,
+                );
 
-              return InteractiveViewer(
-                transformationController: _mainCanvasController,
-                minScale: 0.5,
-                maxScale: 3.5,
-                child: SizedBox(
-                  width: constraints.maxWidth,
-                  height: constraints.maxHeight,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 60),
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: RepaintBoundary(
-                          key: _diagramCanvasKey,
-                          child: Container(
-                            width: vWidth,
-                            height: vHeight,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF131D31),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: Colors.white.withAlpha(20),
+                return InteractiveViewer(
+                  transformationController: _mainCanvasController,
+                  minScale: 0.5,
+                  maxScale: 3.5,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 60),
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          child: RepaintBoundary(
+                            key: _diagramCanvasKey,
+                            child: Container(
+                              width: vWidth,
+                              height: vHeight,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF0F172A)
+                                    : const Color(0xFFFFFFFF),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: isDark
+                                      ? const Color(0xFF334155)
+                                      : const Color(0xFFCBD5E1),
+                                  width: 2.0,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(
+                                      alpha: isDark ? 0.65 : 0.12,
+                                    ),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withAlpha(120),
-                                  blurRadius: 25,
-                                  offset: const Offset(0, 10),
-                                ),
-                              ],
-                            ),
-                            child: Stack(
-                              children: [
-                                CustomPaint(
-                                  size: const Size(vWidth, vHeight),
-                                  painter: SolarRealisticWiringPainter(
-                                    result: result,
-                                    params: params,
-                                    isBangla: _isBangla,
+                              child: Stack(
+                                children: [
+                                  CustomPaint(
+                                    size: const Size(vWidth, vHeight),
+                                    painter: SolarRealisticWiringPainter(
+                                      result: result,
+                                      params: params,
+                                      isBangla: _isBangla,
+                                      isDark: isDark,
+                                      isForPrint: false,
+                                    ),
                                   ),
-                                ),
-                                // ১. অফ-গ্রিড টাচ হটস্পটসমূহ
-                                if (!isGridTied && !isHybrid) ...[
-                                  _buildTouchOverlay(
-                                    offGridPvRect,
-                                    _openPvWiringGuide,
-                                    _isBangla
-                                        ? 'টাচ: প্যানেল সংযোগ'
-                                        : 'Tap: PV Wiring',
-                                  ),
-                                  _buildTouchOverlay(
-                                    offGridControllerRect,
-                                    _openControllerGuide,
-                                    _isBangla
-                                        ? 'টাচ: পোর্ট গাইড'
-                                        : 'Tap: Ports',
-                                  ),
-                                  _buildTouchOverlay(
-                                    offGridBatteryRect,
-                                    _openBatteryWiringGuide,
-                                    _isBangla
-                                        ? 'টাচ: ব্যাটারি সংযোগ'
-                                        : 'Tap: Battery Wiring',
-                                  ),
-                                  if (result.hasAcLoad) ...[
+                                  // টাচ হটস্পটসমূহ
+                                  if (!isGridTied && !isHybrid) ...[
                                     _buildTouchOverlay(
-                                      offGridInverterRect,
+                                      offGridPvRect,
+                                      _openPvWiringGuide,
+                                      _isBangla
+                                          ? 'টাচ: প্যানেল সংযোগ'
+                                          : 'Tap: PV Wiring',
+                                    ),
+                                    _buildTouchOverlay(
+                                      offGridControllerRect,
+                                      _openControllerGuide,
+                                      _isBangla
+                                          ? 'টাচ: পোর্ট গাইড'
+                                          : 'Tap: Ports',
+                                    ),
+                                    _buildTouchOverlay(
+                                      offGridBatteryRect,
+                                      _openBatteryWiringGuide,
+                                      _isBangla
+                                          ? 'টাচ: ব্যাটারি সংযোগ'
+                                          : 'Tap: Battery Wiring',
+                                    ),
+                                    if (result.hasAcLoad) ...[
+                                      _buildTouchOverlay(
+                                        offGridInverterRect,
+                                        _openInverterGuide,
+                                        _isBangla
+                                            ? 'টাচ: ইনভার্টার গাইড'
+                                            : 'Tap: Inverter Guide',
+                                      ),
+                                      _buildTouchOverlay(
+                                        offGridAcLoadRect,
+                                        _openAcLoadGuide,
+                                        _isBangla
+                                            ? 'টাচ: এসি লোড গাইড'
+                                            : 'Tap: AC Loads',
+                                      ),
+                                    ],
+                                    if (result.hasDcLoad)
+                                      _buildTouchOverlay(
+                                        offGridDcLoadRect,
+                                        _openDcLoadGuide,
+                                        _isBangla
+                                            ? 'টাচ: ডিসি লোড গাইড'
+                                            : 'Tap: DC Loads',
+                                      ),
+                                  ],
+                                  if (isHybrid) ...[
+                                    _buildTouchOverlay(
+                                      hybridPvRect,
+                                      _openPvWiringGuide,
+                                      _isBangla
+                                          ? 'টাচ: প্যানেল সংযোগ'
+                                          : 'Tap: PV Wiring',
+                                    ),
+                                    _buildTouchOverlay(
+                                      hybridBatteryRect,
+                                      _openBatteryWiringGuide,
+                                      _isBangla
+                                          ? 'টাচ: ব্যাটারি সংযোগ'
+                                          : 'Tap: Battery Wiring',
+                                    ),
+                                    _buildTouchOverlay(
+                                      hybridInvRect,
+                                      _openHybridInverterGuide,
+                                      _isBangla
+                                          ? 'টাচ: হাইব্রিড গাইড'
+                                          : 'Tap: Hybrid Inverter',
+                                    ),
+                                    _buildTouchOverlay(
+                                      hybridAcLoadRect,
+                                      _openAcLoadGuide,
+                                      _isBangla
+                                          ? 'টাচ: এসি লোড'
+                                          : 'Tap: AC Load',
+                                    ),
+                                    _buildTouchOverlay(
+                                      hybridGridRect,
+                                      _openNationalGridGuide,
+                                      _isBangla
+                                          ? 'টাচ: গ্রিড তথ্য'
+                                          : 'Tap: Utility Grid',
+                                    ),
+                                  ],
+                                  if (isGridTied) ...[
+                                    _buildTouchOverlay(
+                                      gridTiedPvRect,
+                                      _openPvWiringGuide,
+                                      _isBangla
+                                          ? 'টাচ: প্যানেল সংযোগ'
+                                          : 'Tap: PV Wiring',
+                                    ),
+                                    _buildTouchOverlay(
+                                      gridTiedInvRect,
                                       _openInverterGuide,
                                       _isBangla
-                                          ? 'টাচ: ইনভার্টার গাইড'
+                                          ? 'টাচ: অন-গ্রিড ইনভার্টার'
                                           : 'Tap: Inverter Guide',
                                     ),
                                     _buildTouchOverlay(
-                                      offGridAcLoadRect,
+                                      gridTiedMeterRect,
+                                      _openNetMeterGuide,
+                                      _isBangla
+                                          ? 'টাচ: নেট মিটার'
+                                          : 'Tap: Net Meter',
+                                    ),
+                                    _buildTouchOverlay(
+                                      gridTiedAcLoadRect,
                                       _openAcLoadGuide,
                                       _isBangla
-                                          ? 'টাচ: এসি লোড গাইড'
-                                          : 'Tap: AC Loads',
+                                          ? 'টাচ: এসি লোড'
+                                          : 'Tap: AC Load',
+                                    ),
+                                    _buildTouchOverlay(
+                                      gridTiedGridRect,
+                                      _openNationalGridGuide,
+                                      _isBangla
+                                          ? 'টাচ: পাওয়ার গ্রিড'
+                                          : 'Tap: Utility Grid',
                                     ),
                                   ],
-                                  if (result.hasDcLoad)
-                                    _buildTouchOverlay(
-                                      offGridDcLoadRect,
-                                      _openDcLoadGuide,
-                                      _isBangla
-                                          ? 'টাচ: ডিসি লোড গাইড'
-                                          : 'Tap: DC Loads',
-                                    ),
                                 ],
-                                // ২. হাইব্রিড টাচ হটস্পটসমূহ
-                                if (isHybrid) ...[
-                                  _buildTouchOverlay(
-                                    hybridPvRect,
-                                    _openPvWiringGuide,
-                                    _isBangla
-                                        ? 'টাচ: প্যানেল সংযোগ'
-                                        : 'Tap: PV Wiring',
-                                  ),
-                                  _buildTouchOverlay(
-                                    hybridBatteryRect,
-                                    _openBatteryWiringGuide,
-                                    _isBangla
-                                        ? 'টাচ: ব্যাটারি সংযোগ'
-                                        : 'Tap: Battery Wiring',
-                                  ),
-                                  _buildTouchOverlay(
-                                    hybridInvRect,
-                                    _openHybridInverterGuide,
-                                    _isBangla
-                                        ? 'টাচ: হাইব্রিড গাইড'
-                                        : 'Tap: Hybrid Inverter',
-                                  ),
-                                  _buildTouchOverlay(
-                                    hybridAcLoadRect,
-                                    _openAcLoadGuide,
-                                    _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
-                                  ),
-                                  _buildTouchOverlay(
-                                    hybridGridRect,
-                                    _openNationalGridGuide,
-                                    _isBangla
-                                        ? 'টাচ: গ্রিড তথ্য'
-                                        : 'Tap: Utility Grid',
-                                  ),
-                                ],
-                                // ৩. অন-গ্রিড টাচ হটস্পটসমূহ
-                                if (isGridTied) ...[
-                                  _buildTouchOverlay(
-                                    gridTiedPvRect,
-                                    _openPvWiringGuide,
-                                    _isBangla
-                                        ? 'টাচ: প্যানেল সংযোগ'
-                                        : 'Tap: PV Wiring',
-                                  ),
-                                  _buildTouchOverlay(
-                                    gridTiedInvRect,
-                                    _openInverterGuide,
-                                    _isBangla
-                                        ? 'টাচ: অন-গ্রিড ইনভার্টার'
-                                        : 'Tap: Inverter Guide',
-                                  ),
-                                  _buildTouchOverlay(
-                                    gridTiedMeterRect,
-                                    _openNetMeterGuide,
-                                    _isBangla
-                                        ? 'টাচ: নেট মিটার'
-                                        : 'Tap: Net Meter',
-                                  ),
-                                  _buildTouchOverlay(
-                                    gridTiedAcLoadRect,
-                                    _openAcLoadGuide,
-                                    _isBangla ? 'টাচ: এসি লোড' : 'Tap: AC Load',
-                                  ),
-                                  _buildTouchOverlay(
-                                    gridTiedGridRect,
-                                    _openNationalGridGuide,
-                                    _isBangla
-                                        ? 'টাচ: পাওয়ার গ্রিড'
-                                        : 'Tap: Utility Grid',
-                                  ),
-                                ],
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-          Positioned(left: 16, right: 16, bottom: 12, child: _buildLegendBar()),
-        ],
+                );
+              },
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 12,
+              child: _buildTactileLegendBar(isDark),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -991,7 +1224,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               margin: const EdgeInsets.all(6),
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.black.withAlpha(180),
+                color: Colors.black.withValues(alpha: 0.65),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.white24),
               ),
@@ -1006,7 +1239,11 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                   const SizedBox(width: 4),
                   Text(
                     hint,
-                    style: const TextStyle(color: Colors.white70, fontSize: 9),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -1017,13 +1254,25 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     );
   }
 
-  Widget _buildLegendBar() {
+  Widget _buildTactileLegendBar(bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withAlpha(240),
+        color: isDark
+            ? const Color(0xFF1E293B).withValues(alpha: 0.95)
+            : Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Wrap(
         alignment: WrapAlignment.spaceAround,
@@ -1033,33 +1282,38 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           _legendItem(
             const Color(0xFFEF4444),
             _isBangla ? 'ডিসি পজিটিভ (+)' : 'DC Positive (+)',
+            isDark,
           ),
           _legendItem(
-            const Color(0xFF38BDF8),
+            const Color(0xFF1D4ED8),
             _isBangla ? 'ডিসি নেগেটিভ (-)' : 'DC Negative (-)',
+            isDark,
           ),
           if (widget.result.hasAcLoad ||
               widget.params.systemType == SolarSystemType.gridTied) ...[
             _legendItem(
-              const Color(0xFFF59E0B),
+              const Color(0xFFD97706),
               _isBangla ? 'এসি ফেজ (220V)' : 'AC Live (L)',
+              isDark,
             ),
             _legendItem(
-              const Color(0xFF38BDF8),
+              const Color(0xFF06B6D4),
               _isBangla ? 'এসি নিউট্রাল (N)' : 'AC Neutral (N)',
+              isDark,
             ),
           ],
           if (widget.params.systemType != SolarSystemType.offGrid)
             _legendItem(
-              const Color(0xFF10B981),
+              const Color(0xFF059669),
               _isBangla ? 'গ্রিড লাইন' : 'Grid Line',
+              isDark,
             ),
         ],
       ),
     );
   }
 
-  Widget _legendItem(Color color, String text) {
+  Widget _legendItem(Color color, String text, bool isDark) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1071,10 +1325,10 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         const SizedBox(width: 6),
         Text(
           text,
-          style: const TextStyle(
-            color: Colors.white70,
+          style: TextStyle(
+            color: isDark ? Colors.white70 : AppColors.lightTextPrimary,
             fontSize: 10.5,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],

@@ -4,7 +4,6 @@ import '../constants/app_colors.dart';
 import '../models/system_sizing_params.dart';
 import '../services/solar_calculation_service.dart';
 import '../services/solar_radiation_service.dart';
-import '../widgets/theme_toggle_button.dart';
 import 'system_calculation_summary_screen.dart';
 import 'system_diagram_screen.dart';
 
@@ -168,8 +167,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
             Icon(
@@ -182,9 +181,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
               ),
             ),
           ],
@@ -205,10 +202,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                     'Tap any value box below to update them according to your exact panel sticker.',
           style: TextStyle(
             fontSize: 13,
-            height: 1.4,
-            color: isDark
-                ? AppColors.darkTextSecondary
-                : const Color(0xFF37474F),
+            height: 1.45,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
           ),
         ),
         actions: [
@@ -239,7 +234,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: isDark ? AppColors.darkCardBg : Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -259,9 +254,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
               ),
             ),
             const SizedBox(height: 14),
@@ -272,22 +265,20 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               ),
               autofocus: true,
               style: TextStyle(
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
                 fontWeight: FontWeight.bold,
               ),
               decoration: InputDecoration(
                 filled: true,
                 fillColor: isDark
-                    ? AppColors.darkInputBg
-                    : AppColors.lightInputBg,
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF1F5F9),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
                     color: isDark
-                        ? AppColors.darkBorder
-                        : AppColors.lightBorder,
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFCBD5E1),
                   ),
                 ),
                 suffixIcon: IconButton(
@@ -362,20 +353,34 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters'),
+        title: Text(
+          _isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
-          IconButton(
-            onPressed: _handleLanguageToggle,
-            icon: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor,
-                borderRadius: BorderRadius.circular(12),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 1.0,
               ),
-              child: Text(
+            ),
+            child: TextButton.icon(
+              onPressed: _handleLanguageToggle,
+              icon: const Icon(
+                Icons.translate_rounded,
+                color: Colors.white,
+                size: 15,
+              ),
+              label: Text(
                 _isBangla ? 'ENG' : 'বাংলা',
-                style: TextStyle(
-                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -390,19 +395,30 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isDark
-                ? [AppColors.darkBgTop, AppColors.darkBgBottom]
-                : [AppColors.lightBgTop, AppColors.lightBgBottom],
+                ? [
+                    const Color(0xFF030712),
+                    const Color(0xFF0B1120),
+                    const Color(0xFF020617),
+                  ]
+                : [
+                    const Color(0xFFDCECE4),
+                    const Color(0xFFEDF4F0),
+                    const Color(0xFFE2EBE6),
+                  ],
+            stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: Column(
           children: [
+            // ১. স্ক্রোলযোগ্য প্যারামিটার কনটেন্ট
             Expanded(
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Column(
                   children: [
-                    _buildSystemTypeSelector(isDark),
-                    const SizedBox(height: 14),
+                    _buildTactileSystemTypeSelector(isDark),
+                    const SizedBox(height: 16),
                     _buildCard(
                       title: _isBangla
                           ? '${getSecNum()}. সৌর বিকিরণ ও অবস্থান'
@@ -440,11 +456,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                       : (_pshResult?.getMessage(_isBangla) ??
                                             ''),
                                   style: TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 11.5,
                                     color: isDark
-                                        ? AppColors.accentCyan
+                                        ? AppColors.energyGreen
                                         : AppColors.primaryGreen,
-                                    fontStyle: FontStyle.italic,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -459,15 +475,15 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
                                           color: isDark
-                                              ? AppColors.accentCyan
+                                              ? AppColors.energyGreen
                                               : AppColors.primaryGreen,
                                         ),
                                       )
                                     : Icon(
-                                        Icons.refresh,
-                                        size: 20,
+                                        Icons.refresh_rounded,
+                                        size: 22,
                                         color: isDark
-                                            ? AppColors.accentCyan
+                                            ? AppColors.energyGreen
                                             : AppColors.primaryGreen,
                                       ),
                               ),
@@ -476,7 +492,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     if (!isGridTied) ...[
                       _buildCard(
                         title: _isBangla
@@ -500,45 +516,60 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                       onTap: () => setState(
                                         () => _params.systemVoltage = v,
                                       ),
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Container(
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 150,
+                                        ),
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
+                                          vertical: 12,
                                         ),
                                         decoration: BoxDecoration(
                                           color: isSelected
                                               ? (isDark
-                                                    ? AppColors.accentCyan
-                                                    : AppColors.primaryGreen)
+                                                    ? const Color(0xFF064E3B)
+                                                    : const Color(0xFFE8F5E9))
                                               : (isDark
-                                                    ? AppColors.darkInputBg
-                                                    : AppColors.lightInputBg),
+                                                    ? const Color(0xFF0F172A)
+                                                    : const Color(0xFFF1F5F9)),
                                           borderRadius: BorderRadius.circular(
-                                            12,
+                                            14,
                                           ),
                                           border: Border.all(
                                             color: isSelected
-                                                ? (isDark
-                                                      ? AppColors.accentCyan
-                                                      : AppColors.primaryGreen)
+                                                ? AppColors.energyGreen
                                                 : (isDark
-                                                      ? AppColors.darkBorder
-                                                      : AppColors.lightBorder),
-                                            width: 1.5,
+                                                      ? const Color(0xFF334155)
+                                                      : const Color(
+                                                          0xFFCBD5E1,
+                                                        )),
+                                            width: isSelected ? 2.0 : 1.2,
                                           ),
+                                          boxShadow: isSelected
+                                              ? [
+                                                  BoxShadow(
+                                                    color: AppColors.energyGreen
+                                                        .withValues(alpha: 0.3),
+                                                    blurRadius: 8,
+                                                  ),
+                                                ]
+                                              : null,
                                         ),
                                         child: Column(
                                           children: [
                                             Text(
                                               '${v.toInt()} V',
                                               style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 16,
                                                 color: isSelected
-                                                    ? Colors.white
+                                                    ? (isDark
+                                                          ? Colors.white
+                                                          : const Color(
+                                                              0xFF047857,
+                                                            ))
                                                     : (isDark
-                                                          ? AppColors
-                                                                .darkTextPrimary
+                                                          ? Colors.white70
                                                           : AppColors
                                                                 .lightTextPrimary),
                                               ),
@@ -552,11 +583,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                                   fontSize: 10,
                                                   color: isSelected
                                                       ? AppColors.solarGold
-                                                      : (isDark
-                                                            ? AppColors
-                                                                  .accentCyan
-                                                            : AppColors
-                                                                  .primaryGreen),
+                                                      : AppColors.energyGreen,
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                               ),
@@ -570,21 +597,19 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                             ),
                             if (!isHybrid) ...[
                               Divider(
-                                height: 24,
-                                color: isDark
-                                    ? AppColors.darkBorder
-                                    : AppColors.lightBorder,
+                                height: 26,
+                                color: isDark ? Colors.white12 : Colors.black12,
                               ),
                               Text(
                                 _isBangla
-                                    ? 'কন্ট্রোলারের ধরন (Topology):'
+                                    ? 'কন্ট্রোলারের ধরন (Technology):'
                                     : 'Controller Technology:',
                                 style: TextStyle(
                                   fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   color: isDark
-                                      ? AppColors.darkTextPrimary
-                                      : AppColors.lightTextPrimary,
+                                      ? const Color(0xFF94A3B8)
+                                      : AppColors.lightTextSecondary,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -594,8 +619,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                     type: 'mppt',
                                     title: 'MPPT (আধুনিক)',
                                     subtitle: _isBangla
-                                        ? 'উচ্চ দক্ষতা (৯৭-৯৯%)'
-                                        : 'High Efficiency (98%)',
+                                        ? 'উচ্চ দক্ষতা (৯৮%)'
+                                        : 'High Eff (98%)',
                                     isDark: isDark,
                                   ),
                                   const SizedBox(width: 8),
@@ -603,8 +628,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                     type: 'pwm',
                                     title: 'PWM (সাধারণ)',
                                     subtitle: _isBangla
-                                        ? 'বাজেট-বান্ধব (৭০-৭৫%)'
-                                        : 'Budget (70-75%)',
+                                        ? 'বাজেট (৭০-৭৫%)'
+                                        : 'Budget (75%)',
                                     isDark: isDark,
                                   ),
                                 ],
@@ -613,7 +638,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                     ],
                     _buildCard(
                       title: _isBangla
@@ -625,9 +650,9 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                         icon: Icon(
                           Icons.help_outline_rounded,
                           color: isDark
-                              ? AppColors.accentCyan
+                              ? AppColors.energyGreen
                               : AppColors.primaryGreen,
-                          size: 20,
+                          size: 22,
                         ),
                         onPressed: () => _showStickerHelpDialog(isDark),
                         tooltip: _isBangla
@@ -656,46 +681,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                             isDark: isDark,
                             onChanged: (v) => _updatePanelParametersFromWatts(
                               v.roundToDouble(),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color:
-                                  (isDark
-                                          ? AppColors.accentCyan
-                                          : AppColors.primaryGreen)
-                                      .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  size: 14,
-                                  color: isDark
-                                      ? AppColors.accentCyan
-                                      : AppColors.primaryGreen,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    _isBangla
-                                        ? 'প্যানেলের পেছনের স্টিকার অনুযায়ী মান পরিবর্তন করতে বক্সে ট্যাপ করুন।'
-                                        : 'Tap on any parameter box below to enter values from panel sticker.',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark
-                                          ? AppColors.accentCyan
-                                          : AppColors.primaryGreen,
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -756,7 +741,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     if (!isGridTied) ...[
                       _buildCard(
                         title: _isBangla
@@ -856,7 +841,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                     ],
                     if (widget.acPeakWatt > 0 || isGridTied || isHybrid)
                       _buildCard(
@@ -905,94 +890,102 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 ),
               ),
             ),
+
+            // ২. নিচে থাকা ৩ডি ইঞ্জিনিয়ারিং কন্ট্রোল ডক (আলাদা বটম প্ল্যাটফর্ম)
             Container(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               decoration: BoxDecoration(
                 color: isDark
-                    ? AppColors.darkCardBg
-                    : Colors.white, // 👈 খাঁটি সাদা
+                    ? const Color(0xFF070D18)
+                    : const Color(0xFFFFFFFF),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(24),
                 ),
                 border: Border(
                   top: BorderSide(
                     color: isDark
-                        ? AppColors.darkBorder
-                        : const Color(0xFFCBD5E1).withValues(alpha: 0.6),
+                        ? const Color(0xFF10B981).withValues(alpha: 0.45)
+                        : const Color(0xFF94A3B8).withValues(alpha: 0.7),
+                    width: 1.6,
                   ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F172A)
-                        .withValues(alpha: isDark ? 0.35 : 0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, -4),
+                    color: Colors.black.withValues(alpha: isDark ? 0.75 : 0.14),
+                    blurRadius: 20,
+                    offset: const Offset(0, -6),
                   ),
+                  if (!isDark)
+                    const BoxShadow(
+                      color: Colors.white,
+                      blurRadius: 0,
+                      offset: Offset(0, -1),
+                    ),
                 ],
               ),
               child: SafeArea(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // কেপিআই ডিসপ্লে ডক
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildQuickKPI(
-                          label: _isBangla ? 'সিস্টেম টাইপ' : 'Architecture',
-                          value: isGridTied
-                              ? 'On-Grid'
-                              : (isHybrid
-                                    ? 'Hybrid'
-                                    : _params.controllerType.toUpperCase()),
-                          icon: isGridTied
-                              ? Icons.solar_power
-                              : (isHybrid
-                                    ? Icons.sync_alt
-                                    : Icons.tune_rounded),
-                          isDark: isDark,
+                        Expanded(
+                          child: _buildQuickKPI(
+                            label: _isBangla ? 'সিস্টেম' : 'Architecture',
+                            value: isGridTied
+                                ? 'On-Grid'
+                                : (isHybrid
+                                      ? 'Hybrid'
+                                      : _params.controllerType.toUpperCase()),
+                            icon: isGridTied
+                                ? Icons.solar_power_rounded
+                                : (isHybrid
+                                      ? Icons.sync_alt_rounded
+                                      : Icons.tune_rounded),
+                            isDark: isDark,
+                          ),
                         ),
-                        Container(
-                          width: 1,
-                          height: 28,
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                        ),
-                        _buildQuickKPI(
-                          label: _isBangla ? 'প্যানেল সংখ্যা' : 'Est. Panels',
-                          value: '~$approxPanels pcs',
-                          icon: Icons.solar_power,
-                          isDark: isDark,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildQuickKPI(
+                            label: _isBangla ? 'প্যানেল সংখ্যা' : 'Est. Panels',
+                            value: '~$approxPanels pcs',
+                            icon: Icons.grid_view_rounded,
+                            isDark: isDark,
+                          ),
                         ),
                         if (!isGridTied) ...[
-                          Container(
-                            width: 1,
-                            height: 28,
-                            color: isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
-                          ),
-                          _buildQuickKPI(
-                            label: _isBangla
-                                ? 'ব্যাটারি সংখ্যা'
-                                : 'Est. Batteries',
-                            value: '~$approxBatteries pcs',
-                            icon: Icons.battery_charging_full,
-                            isDark: isDark,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildQuickKPI(
+                              label: _isBangla
+                                  ? 'ব্যাটারি সংখ্যা'
+                                  : 'Est. Batteries',
+                              value: '~$approxBatteries pcs',
+                              icon: Icons.battery_charging_full_rounded,
+                              isDark: isDark,
+                            ),
                           ),
                         ],
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // প্রধান অ্যাকশন বাটন
                     SizedBox(
                       width: double.infinity,
-                      height: 48,
+                      height: 50,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isDark
                               ? AppColors.energyGreen
                               : AppColors.primaryGreen,
                           foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: isDark
+                              ? AppColors.energyGreen.withValues(alpha: 0.5)
+                              : const Color(0xFF063A24).withValues(alpha: 0.4),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -1050,6 +1043,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                         icon: const Icon(
                           Icons.arrow_forward_rounded,
                           color: Colors.white,
+                          size: 20,
                         ),
                         label: Text(
                           _isBangla
@@ -1057,8 +1051,9 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                               : 'Calculate & View Diagram',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w900,
                             fontSize: 15,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),
@@ -1073,15 +1068,31 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     );
   }
 
-  Widget _buildSystemTypeSelector(bool isDark) {
+  Widget _buildTactileSystemTypeSelector(bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          width: 1.4,
         ),
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1091,14 +1102,12 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 ? 'সিস্টেম আর্কিটেকচার নির্বাচন করুন:'
                 : 'Select System Architecture:',
             style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.bold,
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : AppColors.lightTextPrimary,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
               _buildTypeCard(
@@ -1143,7 +1152,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required bool isDark,
   }) {
     final isSelected = _selectedSystemType == type;
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
 
     return Expanded(
       child: InkWell(
@@ -1155,62 +1163,68 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             }
           });
         },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark
-                      ? activeColor.withValues(alpha: 0.15)
-                      : const Color(
-                          0xFFDCFCE7,
-                        )) // 👈 সিলেক্টেড হলে সতেজ সফট মিন্ট
-                : (isDark
-                      ? AppColors.darkInputBg
-                      : Colors.white), // 👈 বাকিগুলো পিওর হোয়াইট
-            borderRadius: BorderRadius.circular(12),
+                ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFE8F5E9))
+                : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isSelected
-                  ? activeColor
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-              width: isSelected ? 2.0 : 1.0,
+                  ? AppColors.energyGreen
+                  : (isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFCBD5E1)),
+              width: isSelected ? 2.0 : 1.2,
             ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.energyGreen.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : null,
           ),
           child: Column(
             children: [
               Icon(
                 icon,
                 color: isSelected
-                    ? activeColor
+                    ? AppColors.energyGreen
                     : (isDark ? Colors.white60 : Colors.grey.shade600),
-                size: 24,
+                size: 26,
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 6),
               Text(
                 title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
                   color: isSelected
-                      ? activeColor
-                      : (isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary),
+                      ? (isDark ? Colors.white : const Color(0xFF047857))
+                      : (isDark ? Colors.white70 : AppColors.lightTextPrimary),
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
                   color: isSelected
-                      ? activeColor
+                      ? (isDark
+                            ? const Color(0xFF6EE7B7)
+                            : AppColors.energyGreen)
                       : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
+                            ? const Color(0xFF64748B)
+                            : Colors.grey.shade600),
                 ),
               ),
             ],
@@ -1229,7 +1243,34 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: AppColors.cardDecoration(isDark), // 👈 সরাসরি সেন্ট্রাল মেথড
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          width: 1.4,
+        ),
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+                const BoxShadow(
+                  color: Colors.white,
+                  blurRadius: 0,
+                  offset: Offset(0, -2),
+                ),
+              ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1238,22 +1279,31 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             children: [
               Row(
                 children: [
-                  Icon(
-                    icon,
-                    size: 20,
-                    color: isDark
-                        ? AppColors.accentCyan
-                        : AppColors.primaryGreen,
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color:
+                          (isDark
+                                  ? AppColors.energyGreen
+                                  : AppColors.primaryGreen)
+                              .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color: isDark
+                          ? AppColors.energyGreen
+                          : AppColors.primaryGreen,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     title,
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       fontSize: 14.5,
-                      color: isDark
-                          ? AppColors.accentCyan
-                          : const Color(0xFF134E4A),
+                      color: isDark ? Colors.white : AppColors.lightTextPrimary,
                     ),
                   ),
                 ],
@@ -1261,7 +1311,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               if (action != null) action,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -1275,7 +1325,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required bool isDark,
   }) {
     final isSelected = _params.controllerType == type;
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
 
     return Expanded(
       child: InkWell(
@@ -1285,19 +1334,15 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark
-                      ? activeColor.withValues(alpha: 0.15)
-                      : const Color(
-                          0xFFDCFCE7,
-                        )) // 👈 সিলেক্টেড হলে সতেজ সফট মিন্ট
-                : (isDark
-                      ? AppColors.darkInputBg
-                      : Colors.white), // 👈 বাকিগুলো পিওর হোয়াইট
+                ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFE8F5E9))
+                : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? activeColor
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                  ? AppColors.energyGreen
+                  : (isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFCBD5E1)),
               width: 1.5,
             ),
           ),
@@ -1309,10 +1354,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                   color: isSelected
-                      ? activeColor
-                      : (isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary),
+                      ? (isDark ? Colors.white : const Color(0xFF047857))
+                      : (isDark ? Colors.white70 : AppColors.lightTextPrimary),
                 ),
               ),
               const SizedBox(height: 2),
@@ -1321,10 +1364,10 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 style: TextStyle(
                   fontSize: 10.5,
                   color: isSelected
-                      ? activeColor
+                      ? AppColors.energyGreen
                       : (isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary),
+                            ? const Color(0xFF64748B)
+                            : Colors.grey.shade600),
                 ),
               ),
             ],
@@ -1344,8 +1387,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required ValueChanged<double> onChanged,
     required bool isDark,
   }) {
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1357,9 +1398,9 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               style: TextStyle(
                 fontSize: 13,
                 color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-                fontWeight: FontWeight.w500,
+                    ? const Color(0xFF94A3B8)
+                    : AppColors.lightTextSecondary,
+                fontWeight: FontWeight.w600,
               ),
             ),
             InkWell(
@@ -1374,28 +1415,29 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 3,
+                  vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  // লাইট মোডে সফট অ্যাম্বার ও ডার্কে সায়ান গ্লো
                   color: isDark
-                      ? activeColor.withValues(alpha: 0.12)
+                      ? const Color(0xFF0F172A)
                       : const Color(0xFFFEF3C7),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isDark
-                        ? activeColor.withValues(alpha: 0.3)
-                        : const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                        ? AppColors.energyGreen.withValues(alpha: 0.5)
+                        : const Color(0xFFF59E0B),
+                    width: 1.2,
                   ),
                 ),
                 child: Text(
                   unit.isNotEmpty ? '$value $unit' : '$value',
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'monospace',
                     color: isDark
-                        ? activeColor
-                        : const Color(0xFFB45309), // রিচ অ্যাম্বার টেক্সট
+                        ? AppColors.energyGreen
+                        : const Color(0xFFB45309),
                   ),
                 ),
               ),
@@ -1404,12 +1446,12 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
         ),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: activeColor,
+            activeTrackColor: AppColors.energyGreen,
             inactiveTrackColor: isDark
-                ? Colors.white12
-                : const Color(0xFFE2E8F0),
-            thumbColor: activeColor,
-            overlayColor: activeColor.withValues(alpha: 0.2),
+                ? const Color(0xFF334155)
+                : const Color(0xFFCBD5E1),
+            thumbColor: isDark ? AppColors.energyGreen : AppColors.primaryGreen,
+            overlayColor: AppColors.energyGreen.withValues(alpha: 0.2),
             trackHeight: 4,
           ),
           child: Slider(
@@ -1431,8 +1473,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required ValueChanged<double> onSelected,
     required bool isDark,
   }) {
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
-
     return Row(
       children: items.map((val) {
         final isSelected = selectedValue == val;
@@ -1444,10 +1484,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 child: Text(
                   '${val.toInt()} $unit',
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected
-                        ? FontWeight.bold
-                        : FontWeight.normal,
+                    fontSize: 11.5,
+                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
                     color: isSelected
                         ? Colors.white
                         : (isDark ? Colors.white70 : Colors.black87),
@@ -1455,10 +1493,12 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 ),
               ),
               selected: isSelected,
-              selectedColor: activeColor,
+              selectedColor: isDark
+                  ? AppColors.energyGreen
+                  : AppColors.primaryGreen,
               backgroundColor: isDark
-                  ? AppColors.darkInputBg
-                  : AppColors.lightInputBg,
+                  ? const Color(0xFF0F172A)
+                  : const Color(0xFFF1F5F9),
               showCheckmark: false,
               padding: EdgeInsets.zero,
               onSelected: (_) => onSelected(val),
@@ -1471,7 +1511,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
 
   Widget _buildBatteryTypeButton(String key, String label, bool isDark) {
     final isSelected = _selectedBatteryType == key;
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
 
     return Expanded(
       child: InkWell(
@@ -1481,19 +1520,15 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? (isDark
-                      ? activeColor.withValues(alpha: 0.15)
-                      : const Color(
-                          0xFFDCFCE7,
-                        )) // 👈 সিলেক্টেড হলে সতেজ সফট মিন্ট
-                : (isDark
-                      ? AppColors.darkInputBg
-                      : Colors.white), // 👈 বাকিগুলো পিওর হোয়াইট
+                ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFE8F5E9))
+                : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9)),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected
-                  ? activeColor
-                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                  ? AppColors.energyGreen
+                  : (isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFCBD5E1)),
               width: 1.5,
             ),
           ),
@@ -1502,11 +1537,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               label,
               style: TextStyle(
                 fontSize: 11.5,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontWeight: FontWeight.w900,
                 color: isSelected
-                    ? activeColor
+                    ? (isDark ? Colors.white : const Color(0xFF047857))
                     : (isDark
-                          ? AppColors.darkTextPrimary
+                          ? const Color(0xFF94A3B8)
                           : AppColors.lightTextPrimary),
               ),
             ),
@@ -1528,10 +1563,11 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkInputBg : const Color(0xFFF8FAFC),
+          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isDark ? AppColors.darkBorder : const Color(0xFFE2E8F0),
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+            width: 1.2,
           ),
         ),
         child: Column(
@@ -1541,20 +1577,19 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               style: TextStyle(
                 fontSize: 11,
                 color: isDark
-                    ? AppColors.darkTextSecondary
+                    ? const Color(0xFF94A3B8)
                     : AppColors.lightTextSecondary,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               value,
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'monospace',
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
               ),
             ),
           ],
@@ -1569,46 +1604,58 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     required IconData icon,
     required bool isDark,
   }) {
-    final activeColor = isDark ? AppColors.accentCyan : AppColors.primaryGreen;
-
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: isDark
-                ? activeColor.withValues(alpha: 0.15)
-                : const Color(0xFFECFDF5),
-            borderRadius: BorderRadius.circular(8),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 13,
+                color: isDark ? AppColors.energyGreen : AppColors.primaryGreen,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF475569),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: Icon(icon, size: 18, color: activeColor),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.5,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-              ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'monospace',
+              color: isDark ? Colors.white : AppColors.lightTextPrimary,
             ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-              ),
-            ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 }
