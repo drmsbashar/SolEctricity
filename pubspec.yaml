@@ -1,5 +1,5 @@
 name: solectricity_app
-description: "A new Flutter project."
+description: "A new BCSIR project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -35,9 +35,9 @@ dependencies:
   geocoding: ^3.0.0      # রিভার্স জিওকোডিংয়ের জন্য
   pdf: ^3.10.8
   printing: ^5.12.0
+  shared_preferences: ^2.3.5   # 👈 স্মার্ট হাইব্রিড ক্যাশিংয়ের জন্য যুক্ত করুন
 
   # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_svg: ^2.3.2
   url_launcher: ^6.3.3

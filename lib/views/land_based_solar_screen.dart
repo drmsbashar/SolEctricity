@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../constants/app_colors.dart';
@@ -12,6 +13,38 @@ import '../services/solar_radiation_service.dart';
 import '../widgets/theme_toggle_button.dart';
 
 enum DrawingMode { boundary, obstacle }
+
+// প্ল্যানারের প্রতিটি উপকরণের ডেটা মডেল
+class _PlannerItem {
+  final String key;
+  String nameBn;
+  String nameEn;
+  double watt;
+  final IconData icon;
+  bool isAc; // AC নাকি DC
+  int quantity;
+  double hours;
+
+  _PlannerItem({
+    required this.key,
+    required this.nameBn,
+    required this.nameEn,
+    required this.watt,
+    required this.icon,
+    this.isAc = true,
+    this.quantity = 0,
+    this.hours = 0.0,
+  });
+
+  // কাঁচা শক্তি (Wh)
+  double get rawDailyWh => watt * quantity * hours;
+
+  // কার্যকর দৈনিক শক্তি (AC হলে ইনভার্টারের ৮৮% দক্ষতা / ১২% রূপান্তর অপচয় সমন্বিত)
+  double get effectiveDailyWh {
+    final double raw = rawDailyWh;
+    return isAc ? (raw / 0.88) : raw;
+  }
+}
 
 class LandBasedSolarScreen extends StatefulWidget {
   final bool isBangla;
@@ -44,6 +77,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   double _obstacleAreaSqM = 0.0;
 
   BitmapDescriptor? _whiteDotIcon;
+  // পূর্বের মতো ডিফল্ট স্থির পজিশন
   static const LatLng _initialPosition = LatLng(23.8103, 90.4125);
 
   // ⚡ সোলার সাইজিং ও নাসা ডাটা
@@ -62,11 +96,140 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   bool _isCoastal = false;
   String _locationPlaceName = '';
 
+  // ⚡ দৈনিক লোড প্ল্যানার তালিকা (১২টি উপকরণ)
+  late List<_PlannerItem> _plannerAppliances;
+
   @override
   void initState() {
     super.initState();
     _isBangla = widget.isBangla;
+    _initPlannerAppliances();
     _createWhiteDotIcon();
+  }
+
+  void _initPlannerAppliances() {
+    _plannerAppliances = [
+      _PlannerItem(
+        key: 'light',
+        nameBn: 'লাইট',
+        nameEn: 'Light',
+        watt: 15,
+        icon: Icons.lightbulb_outline_rounded,
+        isAc: true,
+        quantity: 6,
+        hours: 6.0,
+      ),
+      _PlannerItem(
+        key: 'fan',
+        nameBn: 'ফ্যান',
+        nameEn: 'Fan',
+        watt: 65,
+        icon: Icons.mode_fan_off_outlined,
+        isAc: true,
+        quantity: 4,
+        hours: 8.0,
+      ),
+      _PlannerItem(
+        key: 'tv',
+        nameBn: 'টেলিভিশন',
+        nameEn: 'Television',
+        watt: 65,
+        icon: Icons.tv_rounded,
+        isAc: true,
+        quantity: 1,
+        hours: 4.0,
+      ),
+      _PlannerItem(
+        key: 'computer',
+        nameBn: 'কম্পিউটার',
+        nameEn: 'Computer',
+        watt: 150,
+        icon: Icons.computer_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'laptop',
+        nameBn: 'ল্যাপটপ',
+        nameEn: 'Laptop',
+        watt: 65,
+        icon: Icons.laptop_chromebook_rounded,
+        isAc: true,
+        quantity: 1,
+        hours: 6.0,
+      ),
+      _PlannerItem(
+        key: 'printer',
+        nameBn: 'প্রিন্টার',
+        nameEn: 'Printer',
+        watt: 300,
+        icon: Icons.print_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'air_cooler',
+        nameBn: 'এয়ারকুলার',
+        nameEn: 'Air Cooler',
+        watt: 120,
+        icon: Icons.ac_unit_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'refrigerator',
+        nameBn: 'ফ্রিজ',
+        nameEn: 'Refrigerator',
+        watt: 120,
+        icon: Icons.kitchen_rounded,
+        isAc: true,
+        quantity: 1,
+        hours: 12.0,
+      ),
+      _PlannerItem(
+        key: 'cooker',
+        nameBn: 'কুকার',
+        nameEn: 'Cooker',
+        watt: 800,
+        icon: Icons.soup_kitchen_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'oven',
+        nameBn: 'ওভেন',
+        nameEn: 'Oven',
+        watt: 1200,
+        icon: Icons.microwave_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'blender',
+        nameBn: 'ব্লেন্ডার',
+        nameEn: 'Blender',
+        watt: 400,
+        icon: Icons.blender_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'other',
+        nameBn: 'অন্যান্য',
+        nameEn: 'Other',
+        watt: 100,
+        icon: Icons.devices_other_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+    ];
   }
 
   @override
@@ -264,6 +427,102 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     );
   }
 
+  void _editApplianceWatt(
+    BuildContext context,
+    _PlannerItem item,
+    StateSetter setSheetState,
+    bool isDark,
+  ) {
+    final wattController = TextEditingController(
+      text: item.watt.toInt().toString(),
+    );
+    final nameController = TextEditingController(
+      text: _isBangla ? item.nameBn : item.nameEn,
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          _isBangla ? '${item.nameBn} সম্পাদনা' : 'Edit ${item.nameEn}',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : AppColors.lightTextPrimary,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (item.key == 'other') ...[
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: _isBangla ? 'উপকরণের নাম' : 'Appliance Name',
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: wattController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: _isBangla
+                    ? 'রেটেড ওয়াট (Watt)'
+                    : 'Rated Wattage (W)',
+                suffixText: 'W',
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(_isBangla ? 'বাতিল' : 'Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark
+                  ? AppColors.accentCyan
+                  : AppColors.primaryGreen,
+              foregroundColor: isDark ? Colors.black : Colors.white,
+            ),
+            onPressed: () {
+              final newWatt = double.tryParse(wattController.text);
+              if (newWatt != null && newWatt > 0) {
+                setSheetState(() {
+                  item.watt = newWatt;
+                  if (item.key == 'other' &&
+                      nameController.text.trim().isNotEmpty) {
+                    item.nameBn = nameController.text.trim();
+                    item.nameEn = nameController.text.trim();
+                  }
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: Text(_isBangla ? 'সংরক্ষণ' : 'Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openSolarEstimationSheet(
     double netUsableSqM,
     bool isDark,
@@ -326,15 +585,34 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
             final double effectivePR = 0.80 * tempDerate;
             final double dailyGenerationKwh =
                 systemCapacityKwp * psh * effectivePR;
+            final double dailyGenerationWh = dailyGenerationKwh * 1000.0;
             final double monthlyGenerationKwh = dailyGenerationKwh * 30;
 
             final double optimalTilt =
                 SolarCalculationService.calculateOptimalTilt(centroid.latitude);
 
+            // মোট কার্যকর শক্তি চাহিদা (AC লস সমন্বিত)
+            final double totalPlannedEffectiveWh = _plannerAppliances.fold(
+              0.0,
+              (sum, item) => sum + item.effectiveDailyWh,
+            );
+            final double remainingWh =
+                dailyGenerationWh - totalPlannedEffectiveWh;
+            final double usageRatio = dailyGenerationWh > 0
+                ? (totalPlannedEffectiveWh / dailyGenerationWh).clamp(0.0, 1.5)
+                : 0.0;
+            final bool isOverloaded =
+                totalPlannedEffectiveWh > dailyGenerationWh;
+            final Color plannerStatusColor = isOverloaded
+                ? Colors.redAccent
+                : (usageRatio > 0.85
+                      ? Colors.orangeAccent
+                      : AppColors.energyGreen);
+
             return DefaultTabController(
-              length: 3,
+              length: 4,
               child: Container(
-                height: MediaQuery.of(context).size.height * 0.62,
+                height: MediaQuery.of(context).size.height * 0.72,
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
@@ -382,6 +660,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             ),
                           ),
                         ),
+                        // নাসা ক্লাইমেট ডাটা ব্যাজ
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -410,11 +689,13 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                 color: isDark
                                     ? AppColors.accentCyan
                                     : AppColors.energyGreen,
-                                size: 12,
+                                size: 13,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 5),
                               Text(
-                                'NASA POWER',
+                                _isBangla
+                                    ? 'নাসা ক্লাইমেট ডাটা'
+                                    : 'NASA Climate Data',
                                 style: TextStyle(
                                   color: isDark
                                       ? AppColors.accentCyan
@@ -430,6 +711,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                     ),
                     const SizedBox(height: 10),
                     TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       indicatorColor: isDark
                           ? AppColors.accentCyan
                           : AppColors.energyGreen,
@@ -448,6 +731,13 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         Tab(
                           icon: const Icon(Icons.solar_power, size: 18),
                           text: _isBangla ? 'সাইজিং' : 'Sizing',
+                        ),
+                        Tab(
+                          icon: const Icon(
+                            Icons.electric_bolt_rounded,
+                            size: 18,
+                          ),
+                          text: _isBangla ? 'ব্যবহার' : 'Usage Planner',
                         ),
                         Tab(
                           icon: const Icon(Icons.bar_chart_rounded, size: 18),
@@ -758,7 +1048,614 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             ),
                           ),
 
-                          // ---------------- ট্যাব ২: উৎপাদন ও আবহাওয়া ----------------
+                          // ---------------- 🌟 ট্যাব ২: ব্যবহার প্ল্যানার ----------------
+                          SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // এনার্জি বাজেট ও লস স্ট্যাটাস বার
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? AppColors.darkInputBg
+                                        : AppColors.lightInputBg,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isOverloaded
+                                          ? Colors.redAccent.withValues(
+                                              alpha: 0.7,
+                                            )
+                                          : (isDark
+                                                ? AppColors.darkBorder
+                                                : AppColors.lightBorder),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            _isBangla
+                                                ? 'কার্যকর চাহিদা: ${totalPlannedEffectiveWh.toStringAsFixed(0)} Wh'
+                                                : 'Planned: ${totalPlannedEffectiveWh.toStringAsFixed(0)} Wh',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: plannerStatusColor,
+                                            ),
+                                          ),
+                                          Text(
+                                            _isBangla
+                                                ? 'মোট উৎপাদন: ${dailyGenerationWh.toStringAsFixed(0)} Wh'
+                                                : 'Available: ${dailyGenerationWh.toStringAsFixed(0)} Wh',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : AppColors
+                                                        .lightTextSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: LinearProgressIndicator(
+                                          value: usageRatio > 1.0
+                                              ? 1.0
+                                              : usageRatio,
+                                          minHeight: 10,
+                                          backgroundColor: isDark
+                                              ? Colors.white12
+                                              : Colors.black12,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                plannerStatusColor,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            isOverloaded
+                                                ? (_isBangla
+                                                      ? '⚠️ ঘাটতি: +${(-remainingWh).toStringAsFixed(0)} Wh'
+                                                      : '⚠️ Deficit: +${(-remainingWh).toStringAsFixed(0)} Wh')
+                                                : (_isBangla
+                                                      ? 'উদ্বৃত্ত শক্তি: ${remainingWh.toStringAsFixed(0)} Wh'
+                                                      : 'Surplus: ${remainingWh.toStringAsFixed(0)} Wh'),
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: plannerStatusColor,
+                                            ),
+                                          ),
+                                          Text(
+                                            '${(usageRatio * 100).toStringAsFixed(0)}% ${_isBangla ? "ব্যবহার" : "Used"}',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _isBangla
+                                      ? 'বক্সে ক্লিক করে ওয়াট নির্ধারণ করুন এবং AC/DC সিলেক্ট করুন:'
+                                      : 'Tap box to edit Watt. Select AC/DC type:',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : AppColors.lightTextSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+
+                                // ১২টি উপকরণের নতুন বিন্যাসের তালিকা
+                                ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _plannerAppliances.length,
+                                  separatorBuilder: (context, index) =>
+                                      const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final item = _plannerAppliances[index];
+                                    final bool isActive =
+                                        item.quantity > 0 && item.hours > 0;
+
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isActive
+                                            ? (isDark
+                                                  ? const Color(0xFF0F172A)
+                                                  : const Color(0xFFF8FAFC))
+                                            : (isDark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.02,
+                                                    )
+                                                  : Colors.black.withValues(
+                                                      alpha: 0.02,
+                                                    )),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: isActive
+                                              ? (isDark
+                                                    ? AppColors.accentCyan
+                                                          .withValues(
+                                                            alpha: 0.35,
+                                                          )
+                                                    : const Color(0xFF93C5FD))
+                                              : (isDark
+                                                    ? Colors.white10
+                                                    : Colors.black12),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                item.icon,
+                                                size: 20,
+                                                color: isActive
+                                                    ? (isDark
+                                                          ? AppColors.accentCyan
+                                                          : AppColors
+                                                                .primaryGreen)
+                                                    : (isDark
+                                                          ? Colors.white38
+                                                          : Colors.grey),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // ১. উপকরণের নাম ও তার ঠিক নিচে মোট Wh
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      _isBangla
+                                                          ? item.nameBn
+                                                          : item.nameEn,
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: isDark
+                                                            ? Colors.white
+                                                            : AppColors
+                                                                  .lightTextPrimary,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 1),
+                                                    Text(
+                                                      _isBangla
+                                                          ? 'মোট: ${item.effectiveDailyWh.toStringAsFixed(0)} Wh/দিন'
+                                                          : 'Total: ${item.effectiveDailyWh.toStringAsFixed(0)} Wh/day',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: isActive
+                                                            ? (isDark
+                                                                  ? AppColors
+                                                                        .solarGold
+                                                                  : const Color(
+                                                                      0xFFB45309,
+                                                                    ))
+                                                            : (isDark
+                                                                  ? Colors
+                                                                        .white38
+                                                                  : Colors
+                                                                        .grey
+                                                                        .shade600),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              // ২. ওয়াট ইনপুট বক্স (নামের পাশে)
+                                              InkWell(
+                                                onTap: () => _editApplianceWatt(
+                                                  context,
+                                                  item,
+                                                  setSheetState,
+                                                  isDark,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 7,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: isDark
+                                                        ? const Color(
+                                                            0xFF0B132B,
+                                                          )
+                                                        : Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: isDark
+                                                          ? AppColors.accentCyan
+                                                                .withValues(
+                                                                  alpha: 0.5,
+                                                                )
+                                                          : const Color(
+                                                              0xFF0284C7,
+                                                            ),
+                                                      width: 1.1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        '${item.watt.toInt()} W',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontFamily:
+                                                              'monospace',
+                                                          color: isDark
+                                                              ? AppColors
+                                                                    .accentCyan
+                                                              : const Color(
+                                                                  0xFF0284C7,
+                                                                ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                      Icon(
+                                                        Icons.edit,
+                                                        size: 11,
+                                                        color: isDark
+                                                            ? AppColors
+                                                                  .accentCyan
+                                                            : const Color(
+                                                                0xFF0284C7,
+                                                              ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // ৩. AC / DC সিলেক্টর (ওয়াট বক্স এবং সংখ্যার মাঝখানে)
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? Colors.black26
+                                                      : Colors.grey.shade200,
+                                                  borderRadius:
+                                                      BorderRadius.circular(7),
+                                                  border: Border.all(
+                                                    color: isDark
+                                                        ? Colors.white12
+                                                        : Colors.black12,
+                                                  ),
+                                                ),
+                                                padding: const EdgeInsets.all(
+                                                  2,
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // AC বাটন
+                                                    InkWell(
+                                                      onTap: () {
+                                                        if (!item.isAc) {
+                                                          setSheetState(
+                                                            () => item.isAc =
+                                                                true,
+                                                          );
+                                                        }
+                                                      },
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            5,
+                                                          ),
+                                                      child: Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 2.5,
+                                                            ),
+                                                        decoration: BoxDecoration(
+                                                          color: item.isAc
+                                                              ? const Color(
+                                                                  0xFFD97706,
+                                                                )
+                                                              : Colors
+                                                                    .transparent,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                5,
+                                                              ),
+                                                        ),
+                                                        child: Text(
+                                                          'AC',
+                                                          style: TextStyle(
+                                                            fontSize: 9.5,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: item.isAc
+                                                                ? Colors.white
+                                                                : (isDark
+                                                                      ? Colors
+                                                                            .white54
+                                                                      : Colors
+                                                                            .grey
+                                                                            .shade600),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    // DC বাটন
+                                                    InkWell(
+                                                      onTap: () {
+                                                        if (item.isAc) {
+                                                          setSheetState(
+                                                            () => item.isAc =
+                                                                false,
+                                                          );
+                                                        }
+                                                      },
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            5,
+                                                          ),
+                                                      child: Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 2.5,
+                                                            ),
+                                                        decoration: BoxDecoration(
+                                                          color: !item.isAc
+                                                              ? const Color(
+                                                                  0xFF0284C7,
+                                                                )
+                                                              : Colors
+                                                                    .transparent,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                5,
+                                                              ),
+                                                        ),
+                                                        child: Text(
+                                                          'DC',
+                                                          style: TextStyle(
+                                                            fontSize: 9.5,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: !item.isAc
+                                                                ? Colors.white
+                                                                : (isDark
+                                                                      ? Colors
+                                                                            .white54
+                                                                      : Colors
+                                                                            .grey
+                                                                            .shade600),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // ৪. সংখ্যা নির্বাচন (+ / -)
+                                              Row(
+                                                children: [
+                                                  InkWell(
+                                                    onTap: () {
+                                                      if (item.quantity > 0) {
+                                                        setSheetState(
+                                                          () => item.quantity--,
+                                                        );
+                                                      }
+                                                    },
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            4,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? Colors.white12
+                                                            : Colors.black12,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.remove,
+                                                        size: 14,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                        ),
+                                                    child: Text(
+                                                      '${item.quantity}',
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      setSheetState(
+                                                        () => item.quantity++,
+                                                      );
+                                                    },
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            4,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: isDark
+                                                            ? Colors.white12
+                                                            : Colors.black12,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
+                                                      ),
+                                                      child: const Icon(
+                                                        Icons.add,
+                                                        size: 14,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+
+                                          // ৫. স্লাইডার কন্ট্রোল
+                                          if (item.quantity > 0) ...[
+                                            const SizedBox(height: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? Colors.black26
+                                                    : const Color(0xFFF1F5F9),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.schedule_rounded,
+                                                    size: 14,
+                                                    color: isDark
+                                                        ? AppColors.accentCyan
+                                                        : AppColors
+                                                              .primaryGreen,
+                                                  ),
+                                                  const SizedBox(width: 5),
+                                                  Text(
+                                                    _isBangla
+                                                        ? 'দৈনিক চালানোর সময়: ${item.hours.toStringAsFixed(1)} ঘণ্টা'
+                                                        : 'Daily Runtime: ${item.hours.toStringAsFixed(1)} hrs',
+                                                    style: TextStyle(
+                                                      fontSize: 10.5,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: isDark
+                                                          ? const Color(
+                                                              0xFF94A3B8,
+                                                            )
+                                                          : AppColors
+                                                                .lightTextSecondary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: SliderTheme(
+                                                      data: SliderTheme.of(context).copyWith(
+                                                        trackHeight: 3,
+                                                        thumbShape:
+                                                            const RoundSliderThumbShape(
+                                                              enabledThumbRadius:
+                                                                  6,
+                                                            ),
+                                                        activeTrackColor: isDark
+                                                            ? AppColors
+                                                                  .accentCyan
+                                                            : AppColors
+                                                                  .primaryGreen,
+                                                        thumbColor: isDark
+                                                            ? AppColors
+                                                                  .accentCyan
+                                                            : AppColors
+                                                                  .primaryGreen,
+                                                      ),
+                                                      child: Slider(
+                                                        value: item.hours,
+                                                        min: 0.0,
+                                                        max: 24.0,
+                                                        divisions: 48,
+                                                        onChanged: (val) {
+                                                          setSheetState(
+                                                            () => item.hours =
+                                                                val,
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ---------------- ট্যাব ৩: উৎপাদন ও আবহাওয়া ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -944,7 +1841,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             ),
                           ),
 
-                          // ---------------- ট্যাব ৩: ইনস্টলেশন গাইড ----------------
+                          // ---------------- ট্যাব ৪: ইনস্টলেশন গাইড ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1306,6 +2203,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
       ),
       body: Stack(
         children: [
+          // 👈 পূর্বের মতো নিরাপদ গুগল ম্যাপস কনফিগারেশন (বিলিং ট্র্যাকিং ছাড়া)
           Positioned.fill(
             child: GoogleMap(
               initialCameraPosition: const CameraPosition(

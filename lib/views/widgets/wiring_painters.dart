@@ -289,7 +289,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
   }
 
   // =========================================================================
-  // 🌐 ৩. গ্রিড-টাই / অন-গ্রিড ওয়্যারিং
+  // 🌐 ৩. গ্রিড-টাই / অন-গ্রিড ওয়্যারিং (সোজা ও সমান্তরাল সংযোগ সহ)
   // =========================================================================
   void _paintGridTiedDiagram(
     Canvas canvas,
@@ -301,12 +301,14 @@ class SolarRealisticWiringPainter extends CustomPainter {
     Paint pAcNeutral,
     Paint pGridLive,
   ) {
+    // পিভি, ইনভার্টার এবং নেট মিটারকে একই অনুভূমিক উচ্চতা ও তলদেশে রাখা হলো
     final pvRect = Rect.fromLTWH(w * 0.025, h * 0.24, w * 0.20, h * 0.36);
     final stringInvRect = Rect.fromLTWH(w * 0.29, h * 0.24, w * 0.20, h * 0.36);
-    final netMeterRect = Rect.fromLTWH(w * 0.55, h * 0.26, w * 0.17, h * 0.32);
+    final netMeterRect = Rect.fromLTWH(w * 0.55, h * 0.24, w * 0.17, h * 0.36);
     final acLoadRect = Rect.fromLTWH(w * 0.79, h * 0.10, w * 0.18, h * 0.27);
     final gridRect = Rect.fromLTWH(w * 0.79, h * 0.49, w * 0.18, h * 0.27);
 
+    // ১. পিভি থেকে ইনভার্টারে সোজা ডিসি সংযোগ
     final pvPos = Path()
       ..moveTo(pvRect.right, pvRect.top + pvRect.height * 0.28)
       ..lineTo(
@@ -333,33 +335,32 @@ class SolarRealisticWiringPainter extends CustomPainter {
       '${result.pvCableSizeMm} Cu',
     );
 
-    final invAcP = Path()
-      ..moveTo(
-        stringInvRect.right,
-        stringInvRect.top + stringInvRect.height * 0.28,
-      )
-      ..lineTo(
-        netMeterRect.left,
-        netMeterRect.top + netMeterRect.height * 0.31,
-      );
-    final invAcN = Path()
-      ..moveTo(
-        stringInvRect.right,
-        stringInvRect.top + stringInvRect.height * 0.44,
-      )
-      ..lineTo(
-        netMeterRect.left,
-        netMeterRect.top + netMeterRect.height * 0.50,
-      );
-    canvas.drawPath(invAcP, pAcPhase);
-    canvas.drawPath(invAcN, pAcNeutral);
+    // ২. ইনভার্টার থেকে নেট মিটারে সোজা ও সমান্তরাল এসি সংযোগ (কোনো বাঁক ছাড়া)
+    final double acPhaseY = stringInvRect.top + stringInvRect.height * 0.30;
+    final double acNeutralY = stringInvRect.top + stringInvRect.height * 0.48;
+
+    // ফেজ লাইন (একদম সোজা সরলরেখা)
+    canvas.drawLine(
+      Offset(stringInvRect.right, acPhaseY),
+      Offset(netMeterRect.left, acPhaseY),
+      pAcPhase,
+    );
+
+    // নিউট্রাল লাইন (একদম সোজা সরলরেখা)
+    canvas.drawLine(
+      Offset(stringInvRect.right, acNeutralY),
+      Offset(netMeterRect.left, acNeutralY),
+      pAcNeutral,
+    );
+
     final double midInvX = (stringInvRect.right + netMeterRect.left) / 2;
     _drawBreakerBadge(
       canvas,
-      Offset(midInvX, netMeterRect.top + netMeterRect.height * 0.18),
+      Offset(midInvX, acPhaseY - 20),
       'AC MCB ≥ ${result.acBreakerAmp.toInt()}A',
     );
 
+    // ৩. নেট মিটার থেকে এসি লোডে সংযোগ
     final meterToLoad = Path()
       ..moveTo(
         netMeterRect.right,
@@ -376,6 +377,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
       ..lineTo(acLoadRect.left, acLoadRect.top + acLoadRect.height * 0.46);
     canvas.drawPath(meterToLoad, pAcPhase);
 
+    // ৪. নেট মিটার থেকে জাতীয় গ্রিডে সংযোগ
     final meterToGrid = Path()
       ..moveTo(
         netMeterRect.right,
@@ -404,6 +406,7 @@ class SolarRealisticWiringPainter extends CustomPainter {
       isBangla ? 'দ্বিমুখী প্রবাহ' : 'Bi-directional',
     );
 
+    // ব্লকসমূহ অঙ্কন
     _drawCleanPvArray(canvas, pvRect);
     _drawRealisticInverter(
       canvas,
@@ -1135,10 +1138,12 @@ class SolarRealisticWiringPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ২. সোলার প্যানেল ড্রয়িং পেইন্টার
+// =========================================================================
+// ২. ডায়নামিক সোলার প্যানেল ওয়্যারিং পেইন্টার (হুবহু সংখ্যা ও জিরো-ওভারল্যাপ সহ)
+// =========================================================================
 class CleanPanelVisualPainter extends CustomPainter {
-  final int pvs;
-  final int pvp;
+  final int pvs; // সিরিজে প্যানেল সংখ্যা
+  final int pvp; // প্যারালালে স্ট্রিং সংখ্যা
   final bool isBangla;
 
   CleanPanelVisualPainter({
@@ -1152,217 +1157,132 @@ class CleanPanelVisualPainter extends CustomPainter {
     final pPos = Paint()
       ..color = const Color(0xFFEF4444)
       ..strokeWidth = 3.2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
     final pNeg = Paint()
       ..color = const Color(0xFF1D4ED8)
       ..strokeWidth = 3.2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
     final pJumper = Paint()
       ..color = const Color(0xFFD97706)
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 3.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-    if (pvs == 1 && pvp == 1) {
-      final pRect = Rect.fromCenter(
-        center: Offset(size.width / 2, size.height / 2 - 20),
-        width: 130,
-        height: 160,
-      );
-      _drawPanel(canvas, pRect, 'PV-1');
+    const double panelW = 95.0;
+    const double panelH = 120.0;
+    const double gapX = 35.0;
+    const double gapY = 65.0;
+    const double padLeft = 85.0;
+    const double padTop = 45.0;
+
+    final double posBusX = padLeft - 35.0;
+    final double negBusX = padLeft + (pvs * panelW) + ((pvs - 1) * gapX) + 35.0;
+
+    // প্রতিটি স্ট্রিং ও প্যানেল লুপ দিয়ে আঁকা
+    for (int row = 0; row < pvp; row++) {
+      final double curY = padTop + (row * (panelH + gapY));
+
+      for (int col = 0; col < pvs; col++) {
+        final double curX = padLeft + (col * (panelW + gapX));
+        final pRect = Rect.fromLTWH(curX, curY, panelW, panelH);
+
+        final String label = (pvp == 1)
+            ? 'PV-${col + 1}'
+            : 'S${row + 1}-P${col + 1}';
+        _drawPanel(canvas, pRect, label);
+
+        // ১. পাশাপাশি প্যানেলের মাঝে সিরিজ জাম্পার
+        if (col < pvs - 1) {
+          final nextX = curX + panelW + gapX;
+          final jumperY = curY + panelH + 18.0;
+
+          final jPath = Path()
+            ..moveTo(pRect.right - 20, pRect.bottom)
+            ..lineTo(pRect.right - 20, jumperY)
+            ..lineTo(nextX + 20, jumperY)
+            ..lineTo(nextX + 20, curY + panelH);
+          canvas.drawPath(jPath, pJumper);
+
+          _drawText(
+            canvas,
+            Offset((pRect.right + nextX) / 2 - 16, jumperY + 3),
+            isBangla ? 'সিরিজ' : 'Series',
+            const TextStyle(
+              color: Color(0xFFD97706),
+              fontSize: 9.0,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        }
+      }
+
+      // ২. স্ট্রিং-এর বামপ্রান্ত (পজিটিভ) থেকে বাম বাসে লাইন
+      final firstPanelLeft = padLeft;
+      final pathRowPos = Path()
+        ..moveTo(firstPanelLeft + 20, curY + panelH)
+        ..lineTo(firstPanelLeft + 20, curY + panelH + 35.0)
+        ..lineTo(posBusX, curY + panelH + 35.0);
+      canvas.drawPath(pathRowPos, pPos);
+
+      // ৩. স্ট্রিং-এর ডানপ্রান্ত (নেগেটিভ) থেকে ডান বাসে লাইন
+      final lastPanelRight = padLeft + (pvs * panelW) + ((pvs - 1) * gapX);
+      final pathRowNeg = Path()
+        ..moveTo(lastPanelRight - 20, curY + panelH)
+        ..lineTo(lastPanelRight - 20, curY + panelH + 35.0)
+        ..lineTo(negBusX, curY + panelH + 35.0);
+      canvas.drawPath(pathRowNeg, pNeg);
+    }
+
+    // ৪. প্যারালাল বাস সংযোগ (একাধিক স্ট্রিং থাকলে উল্লম্ব লাইন)
+    final double busStartY = padTop + panelH + 35.0;
+    final double busEndY =
+        padTop + ((pvp - 1) * (panelH + gapY)) + panelH + 35.0;
+
+    if (pvp > 1) {
       canvas.drawLine(
-        Offset(pRect.left + 25, pRect.bottom),
-        Offset(pRect.left + 25, pRect.bottom + 65),
+        Offset(posBusX, busStartY),
+        Offset(posBusX, busEndY),
         pPos,
       );
-      _drawText(
-        canvas,
-        Offset(pRect.left + 10, pRect.bottom + 70),
-        'PV (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
       canvas.drawLine(
-        Offset(pRect.right - 25, pRect.bottom),
-        Offset(pRect.right - 25, pRect.bottom + 65),
+        Offset(negBusX, busStartY),
+        Offset(negBusX, busEndY),
         pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(pRect.right - 35, pRect.bottom + 70),
-        'PV (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else if (pvs > 1 && pvp == 1) {
-      final p1 = Rect.fromLTWH(size.width * 0.12, size.height * 0.18, 120, 150);
-      final p2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.18, 120, 150);
-      _drawPanel(canvas, p1, 'Panel 1');
-      _drawPanel(canvas, p2, 'Panel 2');
-      final jumperPath = Path()
-        ..moveTo(p1.right - 25, p1.bottom)
-        ..lineTo(p1.right - 25, p1.bottom + 30)
-        ..lineTo(p2.left + 25, p1.bottom + 30)
-        ..lineTo(p2.left + 25, p2.bottom);
-      canvas.drawPath(jumperPath, pJumper);
-      _drawText(
-        canvas,
-        Offset((p1.right + p2.left) / 2 - 40, p1.bottom + 12),
-        isBangla ? 'সিরিজ জাম্পার (+/-)' : 'Series Wire',
-        const TextStyle(
-          color: Color(0xFFD97706),
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      canvas.drawLine(
-        Offset(p1.left + 25, p1.bottom),
-        Offset(p1.left + 25, p1.bottom + 75),
-        pPos,
-      );
-      _drawText(
-        canvas,
-        Offset(p1.left + 8, p1.bottom + 80),
-        'Array (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      canvas.drawLine(
-        Offset(p2.right - 25, p2.bottom),
-        Offset(p2.right - 25, p2.bottom + 75),
-        pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(p2.right - 42, p2.bottom + 80),
-        'Array (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else if (pvs == 1 && pvp > 1) {
-      final p1 = Rect.fromLTWH(size.width * 0.12, size.height * 0.15, 120, 150);
-      final p2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.15, 120, 150);
-      _drawPanel(canvas, p1, 'String 1');
-      _drawPanel(canvas, p2, 'String 2');
-      final posBus = Path()
-        ..moveTo(p1.left + 25, p1.bottom)
-        ..lineTo(p1.left + 25, p1.bottom + 30)
-        ..lineTo(p2.left + 25, p1.bottom + 30)
-        ..lineTo(p2.left + 25, p2.bottom);
-      canvas.drawPath(posBus, pPos);
-      canvas.drawLine(
-        Offset(p1.left + 25, p1.bottom + 30),
-        Offset(p1.left + 25, p1.bottom + 85),
-        pPos,
-      );
-      _drawText(
-        canvas,
-        Offset(p1.left + 8, p1.bottom + 90),
-        'Array (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final negBus = Path()
-        ..moveTo(p1.right - 25, p1.bottom)
-        ..lineTo(p1.right - 25, p1.bottom + 55)
-        ..lineTo(p2.right - 25, p1.bottom + 55)
-        ..lineTo(p2.right - 25, p2.bottom);
-      canvas.drawPath(negBus, pNeg);
-      canvas.drawLine(
-        Offset(p2.right - 25, p2.bottom + 55),
-        Offset(p2.right - 25, p2.bottom + 85),
-        pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(p2.right - 42, p2.bottom + 90),
-        'Array (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else {
-      final p11 = Rect.fromLTWH(size.width * 0.18, 20, 105, 120);
-      final p12 = Rect.fromLTWH(size.width * 0.54, 20, 105, 120);
-      final p21 = Rect.fromLTWH(size.width * 0.18, 180, 105, 120);
-      final p22 = Rect.fromLTWH(size.width * 0.54, 180, 105, 120);
-      _drawPanel(canvas, p11, 'S1 - Panel 1');
-      _drawPanel(canvas, p12, 'S1 - Panel 2');
-      _drawPanel(canvas, p21, 'S2 - Panel 1');
-      _drawPanel(canvas, p22, 'S2 - Panel 2');
-      final j1 = Path()
-        ..moveTo(p11.right - 20, p11.bottom)
-        ..lineTo(p11.right - 20, p11.bottom + 18)
-        ..lineTo(p12.left + 20, p11.bottom + 18)
-        ..lineTo(p12.left + 20, p12.bottom);
-      canvas.drawPath(j1, pJumper);
-      final j2 = Path()
-        ..moveTo(p21.right - 20, p21.bottom)
-        ..lineTo(p21.right - 20, p21.bottom + 18)
-        ..lineTo(p22.left + 20, p21.bottom + 18)
-        ..lineTo(p22.left + 20, p22.bottom);
-      canvas.drawPath(j2, pJumper);
-      final posPath = Path()
-        ..moveTo(p11.left + 20, p11.bottom)
-        ..lineTo(p11.left - 25, p11.bottom)
-        ..lineTo(p11.left - 25, p21.bottom + 35)
-        ..lineTo(p21.left + 20, p21.bottom + 35)
-        ..lineTo(p21.left + 20, p21.bottom);
-      canvas.drawPath(posPath, pPos);
-      canvas.drawLine(
-        Offset(p11.left - 25, p21.bottom + 35),
-        Offset(p11.left - 25, p21.bottom + 75),
-        pPos,
-      );
-      _drawText(
-        canvas,
-        Offset(p11.left - 45, p21.bottom + 80),
-        'Array (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final negPath = Path()
-        ..moveTo(p12.right - 20, p12.bottom)
-        ..lineTo(p12.right + 25, p12.bottom)
-        ..lineTo(p12.right + 25, p22.bottom + 35)
-        ..lineTo(p22.right - 20, p22.bottom + 35)
-        ..lineTo(p22.right - 20, p22.bottom);
-      canvas.drawPath(negPath, pNeg);
-      canvas.drawLine(
-        Offset(p12.right + 25, p22.bottom + 35),
-        Offset(p12.right + 25, p22.bottom + 75),
-        pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(p12.right + 5, p22.bottom + 80),
-        'Array (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
       );
     }
+
+    // ৫. মূল সিস্টেম আউটপুট টার্মিনাল
+    final double midY = (busStartY + busEndY) / 2;
+
+    // পজিটিভ আউটপুট (বামে সোজা বাইরে)
+    canvas.drawLine(Offset(posBusX, midY), Offset(posBusX - 35, midY), pPos);
+    _drawText(
+      canvas,
+      Offset(posBusX - 80, midY - 8),
+      'PV Array (+)',
+      const TextStyle(
+        color: Colors.redAccent,
+        fontSize: 11.5,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+
+    // নেগেটিভ আউটপুট (ডানে সোজা বাইরে)
+    canvas.drawLine(Offset(negBusX, midY), Offset(negBusX + 35, midY), pNeg);
+    _drawText(
+      canvas,
+      Offset(negBusX + 42, midY - 8),
+      'PV Array (-)',
+      const TextStyle(
+        color: Color(0xFF1D4ED8),
+        fontSize: 11.5,
+        fontWeight: FontWeight.bold,
+      ),
+    );
   }
 
   void _drawPanel(Canvas canvas, Rect r, String label) {
@@ -1377,7 +1297,7 @@ class CleanPanelVisualPainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
     final lineP = Paint()
-      ..color = Colors.cyanAccent.withAlpha(50)
+      ..color = Colors.cyanAccent.withValues(alpha: 0.2)
       ..strokeWidth = 1.0;
     canvas.drawLine(
       Offset(r.left + r.width / 2, r.top),
@@ -1391,31 +1311,31 @@ class CleanPanelVisualPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(r.left + 8, r.top + 8),
+      Offset(r.left + 6, r.top + 6),
       label,
       const TextStyle(
         color: Colors.white,
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(r.left + 16, r.bottom - 20),
+      Offset(r.left + 14, r.bottom - 20),
       '+',
       const TextStyle(
         color: Colors.redAccent,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: FontWeight.bold,
       ),
     );
     _drawText(
       canvas,
-      Offset(r.right - 24, r.bottom - 20),
+      Offset(r.right - 22, r.bottom - 20),
       '-',
       const TextStyle(
         color: Color(0xFF38BDF8),
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: FontWeight.bold,
       ),
     );
@@ -1433,10 +1353,12 @@ class CleanPanelVisualPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ৩. ব্যাটারি ড্রয়িং পেইন্টার
+// =========================================================================
+// ৩. ডায়নামিক ব্যাটারি ব্যাংক ওয়্যারিং পেইন্টার (হুবহু সংখ্যা ও জিরো-ওভারল্যাপ সহ)
+// =========================================================================
 class CleanBatteryVisualPainter extends CustomPainter {
-  final int bs;
-  final int bp;
+  final int bs; // সিরিজে ব্যাটারি সংখ্যা
+  final int bp; // প্যারালালে স্ট্রিং সংখ্যা
   final int sysVolt;
   final bool isBangla;
 
@@ -1452,213 +1374,131 @@ class CleanBatteryVisualPainter extends CustomPainter {
     final pPos = Paint()
       ..color = const Color(0xFFEF4444)
       ..strokeWidth = 3.2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
     final pNeg = Paint()
       ..color = const Color(0xFF1D4ED8)
       ..strokeWidth = 3.2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
     final pJumper = Paint()
       ..color = const Color(0xFFD97706)
       ..strokeWidth = 3.2
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-    if (bs == 1 && bp == 1) {
-      final bRect = Rect.fromCenter(
-        center: Offset(size.width / 2, size.height / 2),
-        width: 130,
-        height: 100,
-      );
-      _drawBattery(canvas, bRect, '12V Battery');
+    const double batW = 105.0;
+    const double batH = 80.0;
+    const double gapX = 35.0;
+    const double gapY = 65.0;
+    const double padLeft = 85.0;
+    const double padTop = 45.0;
+
+    final double posBusX = padLeft - 35.0;
+    final double negBusX = padLeft + (bs * batW) + ((bs - 1) * gapX) + 35.0;
+
+    // প্রতিটি ব্যাটারি স্ট্রিং ও ব্লক লুপ দিয়ে আঁকা
+    for (int row = 0; row < bp; row++) {
+      final double curY = padTop + (row * (batH + gapY));
+
+      for (int col = 0; col < bs; col++) {
+        final double curX = padLeft + (col * (batW + gapX));
+        final bRect = Rect.fromLTWH(curX, curY, batW, batH);
+
+        final String label = (bp == 1)
+            ? 'Bat-${col + 1}'
+            : 'S${row + 1}-B${col + 1}';
+        _drawBattery(canvas, bRect, label);
+
+        // ১. পাশাপাশি ব্যাটারির মাঝে সিরিজ জাম্পার
+        if (col < bs - 1) {
+          final nextX = curX + batW + gapX;
+          final jumperY = curY - 20.0;
+
+          final jPath = Path()
+            ..moveTo(bRect.right - 20, curY)
+            ..lineTo(bRect.right - 20, jumperY)
+            ..lineTo(nextX + 20, jumperY)
+            ..lineTo(nextX + 20, curY);
+          canvas.drawPath(jPath, pJumper);
+
+          _drawText(
+            canvas,
+            Offset((bRect.right + nextX) / 2 - 16, jumperY - 14),
+            isBangla ? 'সিরিজ' : 'Series',
+            const TextStyle(
+              color: Color(0xFFD97706),
+              fontSize: 9.0,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        }
+      }
+
+      // ২. স্ট্রিং-এর বামপ্রান্ত (পজিটিভ) থেকে বাম বাসে লাইন
+      final firstBatLeft = padLeft;
+      final pathRowPos = Path()
+        ..moveTo(firstBatLeft + 20, curY)
+        ..lineTo(firstBatLeft + 20, curY - 20.0)
+        ..lineTo(posBusX, curY - 20.0);
+      canvas.drawPath(pathRowPos, pPos);
+
+      // ৩. স্ট্রিং-এর ডানপ্রান্ত (নেগেটিভ) থেকে ডান বাসে লাইন
+      final lastBatRight = padLeft + (bs * batW) + ((bs - 1) * gapX);
+      final pathRowNeg = Path()
+        ..moveTo(lastBatRight - 20, curY)
+        ..lineTo(lastBatRight - 20, curY - 20.0)
+        ..lineTo(negBusX, curY - 20.0);
+      canvas.drawPath(pathRowNeg, pNeg);
+    }
+
+    // ৪. প্যারালাল বাস সংযোগ
+    final double busStartY = padTop - 20.0;
+    final double busEndY = padTop + ((bp - 1) * (batH + gapY)) - 20.0;
+
+    if (bp > 1) {
       canvas.drawLine(
-        Offset(bRect.left + 25, bRect.top),
-        Offset(bRect.left + 25, bRect.top - 40),
+        Offset(posBusX, busStartY),
+        Offset(posBusX, busEndY),
         pPos,
       );
-      _drawText(
-        canvas,
-        Offset(bRect.left + 15, bRect.top - 55),
-        '12V (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
       canvas.drawLine(
-        Offset(bRect.right - 25, bRect.top),
-        Offset(bRect.right - 25, bRect.top - 40),
+        Offset(negBusX, busStartY),
+        Offset(negBusX, busEndY),
         pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(bRect.right - 35, bRect.top - 55),
-        '12V (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else if (bs > 1 && bp == 1) {
-      final b1 = Rect.fromLTWH(size.width * 0.12, size.height * 0.30, 120, 100);
-      final b2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.30, 120, 100);
-      _drawBattery(canvas, b1, 'Battery 1');
-      _drawBattery(canvas, b2, 'Battery 2');
-      final jPath = Path()
-        ..moveTo(b1.right - 25, b1.top)
-        ..lineTo(b1.right - 25, b1.top - 25)
-        ..lineTo(b2.left + 25, b1.top - 25)
-        ..lineTo(b2.left + 25, b2.top);
-      canvas.drawPath(jPath, pJumper);
-      _drawText(
-        canvas,
-        Offset((b1.right + b2.left) / 2 - 40, b1.top - 40),
-        isBangla ? 'সিরিজ জাম্পার' : 'Series Jumper',
-        const TextStyle(
-          color: Color(0xFFD97706),
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      canvas.drawLine(
-        Offset(b1.left + 25, b1.top),
-        Offset(b1.left + 25, b1.top - 55),
-        pPos,
-      );
-      _drawText(
-        canvas,
-        Offset(b1.left + 8, b1.top - 70),
-        '$sysVolt\V (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      canvas.drawLine(
-        Offset(b2.right - 25, b2.top),
-        Offset(b2.right - 25, b2.top - 55),
-        pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(b2.right - 42, b2.top - 70),
-        '$sysVolt\V (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else if (bs == 1 && bp > 1) {
-      final b1 = Rect.fromLTWH(size.width * 0.12, size.height * 0.30, 120, 100);
-      final b2 = Rect.fromLTWH(size.width * 0.62, size.height * 0.30, 120, 100);
-      _drawBattery(canvas, b1, 'Bat 1 (12V)');
-      _drawBattery(canvas, b2, 'Bat 2 (12V)');
-      final posPath = Path()
-        ..moveTo(b1.left + 25, b1.top)
-        ..lineTo(b1.left + 25, b1.top - 25)
-        ..lineTo(b2.left + 25, b1.top - 25)
-        ..lineTo(b2.left + 25, b2.top);
-      canvas.drawPath(posPath, pPos);
-      canvas.drawLine(
-        Offset(b1.left + 25, b1.top - 25),
-        Offset(b1.left + 25, b1.top - 60),
-        pPos,
-      );
-      _drawText(
-        canvas,
-        Offset(b1.left + 8, b1.top - 75),
-        '12V (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final negPath = Path()
-        ..moveTo(b1.right - 25, b1.top)
-        ..lineTo(b1.right - 25, b1.top - 48)
-        ..lineTo(b2.right - 25, b1.top - 48)
-        ..lineTo(b2.right - 25, b2.top);
-      canvas.drawPath(negPath, pNeg);
-      canvas.drawLine(
-        Offset(b2.right - 25, b2.top - 48),
-        Offset(b2.right - 25, b2.top - 60),
-        pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(b2.right - 42, b2.top - 75),
-        '12V (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else {
-      final b11 = Rect.fromLTWH(size.width * 0.08, 40, 105, 85);
-      final b12 = Rect.fromLTWH(size.width * 0.44, 40, 105, 85);
-      final b21 = Rect.fromLTWH(size.width * 0.08, 190, 105, 85);
-      final b22 = Rect.fromLTWH(size.width * 0.44, 190, 105, 85);
-      _drawBattery(canvas, b11, 'B1');
-      _drawBattery(canvas, b12, 'B2');
-      _drawBattery(canvas, b21, 'B3');
-      _drawBattery(canvas, b22, 'B4');
-      canvas.drawLine(
-        Offset(b11.right - 20, b11.top),
-        Offset(b12.left + 20, b12.top),
-        pJumper,
-      );
-      canvas.drawLine(
-        Offset(b21.right - 20, b21.top),
-        Offset(b22.left + 20, b22.top),
-        pJumper,
-      );
-      final pathParPos = Path()
-        ..moveTo(b11.left + 20, b11.top)
-        ..lineTo(size.width * 0.76, b11.top)
-        ..lineTo(size.width * 0.76, b21.top)
-        ..lineTo(b21.left + 20, b21.top);
-      canvas.drawPath(pathParPos, pPos);
-      canvas.drawLine(
-        Offset(size.width * 0.76, (b11.top + b21.top) / 2),
-        Offset(size.width * 0.90, (b11.top + b21.top) / 2),
-        pPos,
-      );
-      _drawText(
-        canvas,
-        Offset(size.width * 0.78, (b11.top + b21.top) / 2 - 16),
-        '$sysVolt\V (+)',
-        const TextStyle(
-          color: Colors.redAccent,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final pathParNeg = Path()
-        ..moveTo(b12.right - 20, b12.top)
-        ..lineTo(size.width * 0.84, b12.top)
-        ..lineTo(size.width * 0.84, b22.top)
-        ..lineTo(b22.right - 20, b22.top);
-      canvas.drawPath(pathParNeg, pNeg);
-      canvas.drawLine(
-        Offset(size.width * 0.84, (b12.top + b22.top) / 2 + 15),
-        Offset(size.width * 0.90, (b12.top + b22.top) / 2 + 15),
-        pNeg,
-      );
-      _drawText(
-        canvas,
-        Offset(size.width * 0.78, (b12.top + b22.top) / 2 + 20),
-        '$sysVolt\V (-)',
-        const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
       );
     }
+
+    // ৫. মূল সিস্টেম আউটপুট টার্মিনাল
+    final double midY = (busStartY + busEndY) / 2;
+
+    // পজিটিভ আউটপুট (বামে সোজা বাইরে)
+    canvas.drawLine(Offset(posBusX, midY), Offset(posBusX - 35, midY), pPos);
+    _drawText(
+      canvas,
+      Offset(posBusX - 80, midY - 8),
+      '$sysVolt V (+)',
+      const TextStyle(
+        color: Colors.redAccent,
+        fontSize: 11.5,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+
+    // নেগেটিভ আউটপুট (ডানে সোজা বাইরে)
+    canvas.drawLine(Offset(negBusX, midY), Offset(negBusX + 35, midY), pNeg);
+    _drawText(
+      canvas,
+      Offset(negBusX + 42, midY - 8),
+      '$sysVolt V (-)',
+      const TextStyle(
+        color: Color(0xFF1D4ED8),
+        fontSize: 11.5,
+        fontWeight: FontWeight.bold,
+      ),
+    );
   }
 
   void _drawBattery(Canvas canvas, Rect r, String label) {
@@ -1674,7 +1514,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
     );
     _drawText(
       canvas,
-      Offset(r.left + 8, r.bottom - 20),
+      Offset(r.left + 8, r.bottom - 18),
       label,
       const TextStyle(
         color: Colors.white,
@@ -1683,31 +1523,28 @@ class CleanBatteryVisualPainter extends CustomPainter {
       ),
     );
     canvas.drawCircle(
-      Offset(r.left + 20, r.top + 10),
-      6,
+      Offset(r.left + 20, r.top + 8),
+      5.5,
       Paint()..color = Colors.redAccent,
     );
     canvas.drawCircle(
-      Offset(r.right - 20, r.top + 10),
-      6,
+      Offset(r.right - 20, r.top + 8),
+      5.5,
       Paint()..color = const Color(0xFF1D4ED8),
     );
     _drawText(
       canvas,
-      Offset(r.left + 17, r.top + 5),
+      Offset(r.left + 17, r.top + 3),
       '+',
-      const TextStyle(color: Colors.white, fontSize: 10),
+      const TextStyle(color: Colors.white, fontSize: 9.5),
     );
     _drawText(
       canvas,
-      Offset(r.right - 23, r.top + 3),
+      Offset(r.right - 23, r.top + 2),
       '-',
-      const TextStyle(color: Colors.white, fontSize: 12),
+      const TextStyle(color: Colors.white, fontSize: 11),
     );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 
   void _drawText(Canvas canvas, Offset offset, String text, TextStyle style) {
     final tp = TextPainter(
@@ -1716,4 +1553,7 @@ class CleanBatteryVisualPainter extends CustomPainter {
     )..layout();
     tp.paint(canvas, offset);
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

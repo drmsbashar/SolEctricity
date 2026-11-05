@@ -776,12 +776,11 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              // স্থান পরিবর্তন: শীর্ষে 'মোট আয়ুষ্কাল: ২৫ বছর'
               Text(
-                _isBangla
-                    ? '${freeYears.toStringAsFixed(1)} বছর বিনামূল্যে বিদ্যুৎ'
-                    : '${freeYears.toStringAsFixed(1)} Yrs Free Power',
-                style: const TextStyle(
-                  color: AppColors.energyGreen,
+                _isBangla ? 'মোট আয়ুষ্কাল: ২৫ বছর' : 'Total Lifecycle: 25 yrs',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -820,11 +819,15 @@ class _CostBasedSolarScreenState extends State<CostBasedSolarScreen> {
                   fontSize: 10,
                 ),
               ),
+              // স্থান পরিবর্তন: নিচে '... বছর বিনামূল্যে বিদ্যুৎ'
               Text(
-                _isBangla ? 'মোট আয়ুষ্কাল: ২৫ বছর' : 'Total Lifecycle: 25 yrs',
-                style: TextStyle(
-                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                _isBangla
+                    ? '${freeYears.toStringAsFixed(1)} বছর বিনামূল্যে বিদ্যুৎ'
+                    : '${freeYears.toStringAsFixed(1)} Yrs Free Power',
+                style: const TextStyle(
+                  color: AppColors.energyGreen,
                   fontSize: 10,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],

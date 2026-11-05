@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -189,25 +190,14 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     final result = widget.result;
     final int pvs = result.panelsSeries;
     final int pvp = result.panelsParallel;
-    String modeText;
-    if (pvs == 1 && pvp == 1) {
-      modeText = _isBangla ? 'একক প্যানেল সংযোগ' : 'Single Panel Setup';
-    } else if (pvs > 1 && pvp == 1) {
-      modeText = _isBangla
-          ? 'সিরিজ সংযোগ ($pvsটি প্যানেল)'
-          : 'Pure Series ($pvs Panels)';
-    } else if (pvs == 1 && pvp > 1) {
-      modeText = _isBangla
-          ? 'প্যারালাল সংযোগ ($pvpটি সারি)'
-          : 'Pure Parallel ($pvp Strings)';
-    } else {
-      modeText = _isBangla
-          ? 'মিশ্র সংযোগ ($pvs সিরিজ × $pvp প্যারালাল)'
-          : 'Series-Parallel ($pvs Series × $pvp Strings)';
-    }
 
-    final double canvasWidth = (pvs > 1 && pvp > 1) ? 750 : 600;
-    final double canvasHeight = (pvs > 1 && pvp > 1) ? 460 : 380;
+    final String modeText = _isBangla
+        ? 'মোট ${result.totalPanels}টি প্যানেল ($pvsটি সিরিজে × $pvpটি প্যারালালে)'
+        : 'Total ${result.totalPanels} Panels ($pvs in Series × $pvp in Parallel)';
+
+    // গণনার সংখ্যার ওপর ভিত্তি করে ক্যানভাসের ডায়নামিক দৈর্ঘ্য-প্রস্থ নির্ধারণ
+    final double canvasWidth = math.max(600.0, 180.0 + (pvs * 130.0));
+    final double canvasHeight = math.max(380.0, 120.0 + (pvp * 185.0));
 
     _showDetailModal(
       title: _isBangla
@@ -238,7 +228,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '$modeText (${result.totalPanels} ${_isBangla ? "টি" : "Panels"})',
+                    modeText,
                     style: TextStyle(
                       color: isDark
                           ? Colors.cyanAccent
@@ -251,41 +241,43 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
+          // ইন্টারেক্টিভ জুম ও প্যান কন্টেইনার
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.contain,
-                  child: Container(
-                    width: canvasWidth,
-                    height: canvasHeight,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF090E17) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? const Color(0xFF334155)
-                            : const Color(0xFFCBD5E1),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isDark ? 0.5 : 0.08,
-                          ),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+            child: InteractiveViewer(
+              constrained: false,
+              boundaryMargin: const EdgeInsets.all(50),
+              minScale: 0.3,
+              maxScale: 3.0,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  width: canvasWidth,
+                  height: canvasHeight,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF090E17) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
+                      width: 1.5,
                     ),
-                    child: CustomPaint(
-                      painter: CleanPanelVisualPainter(
-                        pvs: pvs,
-                        pvp: pvp,
-                        isBangla: _isBangla,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.5 : 0.08,
+                        ),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
+                    ],
+                  ),
+                  child: CustomPaint(
+                    size: Size(canvasWidth, canvasHeight),
+                    painter: CleanPanelVisualPainter(
+                      pvs: pvs,
+                      pvp: pvp,
+                      isBangla: _isBangla,
                     ),
                   ),
                 ),
@@ -307,25 +299,14 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     final result = widget.result;
     final int bs = result.batteriesSeries;
     final int bp = result.batteriesParallel;
-    String modeText;
-    if (bs == 1 && bp == 1) {
-      modeText = _isBangla ? 'একক ১২V ব্যাটারি' : 'Single 12V Battery';
-    } else if (bs > 1 && bp == 1) {
-      modeText = _isBangla
-          ? 'সিরিজ সংযোগ ($bsটি ব্যাটারি = ${widget.params.systemVoltage.toInt()}V)'
-          : 'Series Setup ($bs x 12V = ${widget.params.systemVoltage.toInt()}V)';
-    } else if (bs == 1 && bp > 1) {
-      modeText = _isBangla
-          ? 'প্যারালাল সংযোগ ($bpটি প্যারালাল)'
-          : 'Parallel Setup ($bp Strings)';
-    } else {
-      modeText = _isBangla
-          ? 'মিশ্র সংযোগ ($bs সিরিজ × $bp প্যারালাল)'
-          : 'Series-Parallel ($bs Series × $bp Strings)';
-    }
 
-    final double canvasWidth = (bs > 1 && bp > 1) ? 750 : 600;
-    final double canvasHeight = (bs > 1 && bp > 1) ? 460 : 380;
+    final String modeText = _isBangla
+        ? 'মোট ${result.totalBatteries}টি ব্যাটারি ($bsটি সিরিজে × $bpটি প্যারালালে = ${widget.params.systemVoltage.toInt()}V)'
+        : 'Total ${result.totalBatteries} Batteries ($bs in Series × $bp in Parallel = ${widget.params.systemVoltage.toInt()}V)';
+
+    // গণনার সংখ্যার ওপর ভিত্তি করে ক্যানভাসের ডায়নামিক দৈর্ঘ্য-প্রস্থ নির্ধারণ
+    final double canvasWidth = math.max(600.0, 180.0 + (bs * 140.0));
+    final double canvasHeight = math.max(380.0, 120.0 + (bp * 145.0));
 
     _showDetailModal(
       title: _isBangla
@@ -356,7 +337,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '$modeText (${result.totalBatteries} ${_isBangla ? "টি" : "Units"})',
+                    modeText,
                     style: TextStyle(
                       color: isDark
                           ? Colors.amberAccent
@@ -369,42 +350,44 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
+          // ইন্টারেক্টিভ জুম ও প্যান কন্টেইনার
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.contain,
-                  child: Container(
-                    width: canvasWidth,
-                    height: canvasHeight,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF090E17) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? const Color(0xFF334155)
-                            : const Color(0xFFCBD5E1),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isDark ? 0.5 : 0.08,
-                          ),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+            child: InteractiveViewer(
+              constrained: false,
+              boundaryMargin: const EdgeInsets.all(50),
+              minScale: 0.3,
+              maxScale: 3.0,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  width: canvasWidth,
+                  height: canvasHeight,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF090E17) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
+                      width: 1.5,
                     ),
-                    child: CustomPaint(
-                      painter: CleanBatteryVisualPainter(
-                        bs: bs,
-                        bp: bp,
-                        sysVolt: widget.params.systemVoltage.toInt(),
-                        isBangla: _isBangla,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.5 : 0.08,
+                        ),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
+                    ],
+                  ),
+                  child: CustomPaint(
+                    size: Size(canvasWidth, canvasHeight),
+                    painter: CleanBatteryVisualPainter(
+                      bs: bs,
+                      bp: bp,
+                      sysVolt: widget.params.systemVoltage.toInt(),
+                      isBangla: _isBangla,
                     ),
                   ),
                 ),

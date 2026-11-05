@@ -31,16 +31,130 @@ class _SystemCalculationSummaryScreenState
   bool _showBatteryDetails = false;
   bool _showProtectionDetails = false;
 
+  // 💰 পরিবর্তনশীল বাজার দর ভ্যারিয়েবল
+  double? _customRatePerWatt;
+
   @override
   void initState() {
     super.initState();
     _isBangla = widget.isBangla;
+    _initDefaultRate();
+  }
+
+  void _initDefaultRate() {
+    final isGridTied = widget.params.systemType == SolarSystemType.gridTied;
+    final isHybrid = widget.params.systemType == SolarSystemType.hybrid;
+
+    if (isGridTied) {
+      _customRatePerWatt = 70.0;
+    } else if (isHybrid) {
+      _customRatePerWatt = 110.0;
+    } else {
+      _customRatePerWatt = 125.0;
+    }
   }
 
   void _toggleLanguage() {
     setState(() {
       _isBangla = !_isBangla;
     });
+  }
+
+  void _openRateEditorDialog(bool isDark) {
+    final controller = TextEditingController(
+      text: _customRatePerWatt?.toStringAsFixed(0) ?? '70',
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isBangla
+                  ? 'প্রতি ওয়াট সিস্টেম খরচ নির্ধারণ করুন'
+                  : 'Set Turnkey Cost per Watt',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _isBangla
+                  ? 'লোকাল বাজারের সরঞ্জাম ও ইনস্টলেশন দর অনুযায়ী প্রতি ওয়াটের রেট (টাকা/Wp) লিখুন:'
+                  : 'Enter current market turnkey rate per watt (BDT/Wp):',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              autofocus: true,
+              style: TextStyle(
+                color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: isDark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF1F5F9),
+                prefixText: '৳ ',
+                suffixText: '/ Wp',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFCBD5E1),
+                  ),
+                ),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    Icons.check_circle_rounded,
+                    color: isDark
+                        ? AppColors.accentCyan
+                        : AppColors.primaryGreen,
+                  ),
+                  onPressed: () {
+                    final val = double.tryParse(controller.text);
+                    if (val != null && val > 0) {
+                      setState(() {
+                        _customRatePerWatt = val;
+                      });
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -50,6 +164,13 @@ class _SystemCalculationSummaryScreenState
     final params = widget.params;
     final isGridTied = params.systemType == SolarSystemType.gridTied;
     final isHybrid = params.systemType == SolarSystemType.hybrid;
+
+    // 📐 স্থান ও আনুমানিক বাজেটের হিসাব
+    final double totalWatts = result.totalArrayWatt;
+    final double estimatedRoofSqFt = (totalWatts / 1000.0) * 88.0;
+    final double estimatedRoofSqM = estimatedRoofSqFt / 10.7639;
+    final double effectiveRate = _customRatePerWatt ?? 70.0;
+    final double estimatedTotalBudget = totalWatts * effectiveRate;
 
     return Scaffold(
       appBar: AppBar(
@@ -134,25 +255,35 @@ class _SystemCalculationSummaryScreenState
                     _buildTactileDemandHeaderCard(result, params, isDark),
                     const SizedBox(height: 16),
 
-                    // ২. সোলার পিভি অ্যারে কার্ড
+                    // ২. সম্ভাব্য স্থান ও আনুমানিক বাজেট কার্ড (পরিবর্তনশীল বাজারদরসহ)
+                    _buildSpaceAndBudgetCard(
+                      roofSqFt: estimatedRoofSqFt,
+                      roofSqM: estimatedRoofSqM,
+                      budgetAmount: estimatedTotalBudget,
+                      ratePerWatt: effectiveRate,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ৩. সোলার পিভি অ্যারে কার্ড
                     _buildPvArrayCard(result, params, isDark),
                     const SizedBox(height: 16),
 
-                    // ৩. ব্যাটারি ব্যাংক কার্ড (অন-গ্রিড হলে সম্পূর্ণ বাদ)
+                    // ৪. ব্যাটারি ব্যাংক কার্ড (অন-গ্রিড হলে বাদ)
                     if (!isGridTied) ...[
                       _buildBatteryBankCard(result, params, isDark),
                       const SizedBox(height: 16),
                     ],
 
-                    // ৪. পাওয়ার ইলেকট্রনিক্স কার্ড
+                    // ৫. পাওয়ার ইলেকট্রনিক্স কার্ড
                     _buildPowerElectronicsCard(result, params, isDark),
                     const SizedBox(height: 16),
 
-                    // ৫. সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
+                    // ৬. সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
                     _buildProtectionAndCablesCard(result, params, isDark),
                     const SizedBox(height: 16),
 
-                    // ৬. সিস্টেম রিক্যাপ কার্ড
+                    // ৭. সিস্টেম রিক্যাপ কার্ড
                     _buildSystemSpecsRecapCard(result, params, isDark),
                   ],
                 ),
@@ -404,6 +535,228 @@ class _SystemCalculationSummaryScreenState
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpaceAndBudgetCard({
+    required double roofSqFt,
+    required double roofSqM,
+    required double budgetAmount,
+    required double ratePerWatt,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+          width: 1.4,
+        ),
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.accentCyan.withValues(alpha: 0.15)
+                      : const Color(0xFFE0F2FE),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.real_estate_agent_rounded,
+                  size: 20,
+                  color: isDark
+                      ? AppColors.accentCyan
+                      : const Color(0xFF0284C7),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _isBangla
+                    ? 'প্রাক্কলিত স্থান ও বাজেট'
+                    : 'Estimated Space & Budget',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
+                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              // প্রয়োজনীয় স্থান
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.roofing_rounded,
+                            size: 16,
+                            color: AppColors.energyGreen,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _isBangla ? 'প্রয়োজনীয় ছাদ/জায়গা' : 'Required Area',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : AppColors.lightTextSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '≈ ${roofSqFt.toStringAsFixed(0)} sq.ft',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'monospace',
+                          color: AppColors.energyGreen,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _isBangla
+                            ? '(${roofSqM.toStringAsFixed(1)} m² ছায়ামুক্ত স্থান)'
+                            : '(${roofSqM.toStringAsFixed(1)} m² shadow-free area)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? Colors.white38 : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // আনুমানিক বাজেট (Tap to edit)
+              Expanded(
+                child: InkWell(
+                  onTap: () => _openRateEditorDialog(isDark),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF334155)
+                            : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.payments_rounded,
+                                  size: 16,
+                                  color: AppColors.solarGold,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _isBangla
+                                      ? 'আনুমানিক বাজেট'
+                                      : 'Estimated Budget',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : AppColors.lightTextSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Icon(
+                              Icons.edit_note_rounded,
+                              size: 16,
+                              color: isDark
+                                  ? AppColors.accentCyan
+                                  : AppColors.primaryGreen,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '৳ ${(budgetAmount / 1000).toStringAsFixed(0)}k',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'monospace',
+                            color: AppColors.solarGold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _isBangla
+                              ? '(@ ৳ ${ratePerWatt.toInt()}/Wp - পরিবর্তনযোগ্য)'
+                              : '(@ ৳ ${ratePerWatt.toInt()}/Wp - Editable)',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? Colors.white54
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

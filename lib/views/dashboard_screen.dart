@@ -18,6 +18,7 @@ import 'license_screen.dart';
 import 'load_selection_screen.dart';
 import 'maintenance_screen.dart';
 import 'tools_screen.dart';
+import 'financial_analysis_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -26,10 +27,72 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool isBangla = true;
   bool isMenuOpen = false;
+
+  // 🎛️ ফ্লোটিং কন্ট্রোল স্লাইড অ্যানিমেশন
+  late AnimationController _controlsAnimationController;
+  late Animation<Offset> _leftSlideAnimation;
+  late Animation<Offset> _rightSlideAnimation;
+  bool _areControlsVisible = false; // শুরুতে বাটনগুলো অদৃশ্য থাকবে
+
+  @override
+  void initState() {
+    super.initState();
+    _controlsAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    // বাঁ দিক থেকে ড্রয়ার বাটন স্লাইড হওয়া
+    _leftSlideAnimation =
+        Tween<Offset>(
+          begin: const Offset(-2.0, 0.0), // স্ক্রিনের বাঁয়ে লুকানো থাকবে
+          end: Offset.zero, // দৃশ্যমান পজিশন
+        ).animate(
+          CurvedAnimation(
+            parent: _controlsAnimationController,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
+
+    // ডান দিক থেকে মোড ও ভাষা বাটন স্লাইড হওয়া
+    _rightSlideAnimation =
+        Tween<Offset>(
+          begin: const Offset(2.0, 0.0), // স্ক্রিনের ডানে লুকানো থাকবে
+          end: Offset.zero, // দৃশ্যমান পজিশন
+        ).animate(
+          CurvedAnimation(
+            parent: _controlsAnimationController,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
+
+    // প্রারম্ভিক মান 0.0 করায় শুরুতে বাটনগুলো স্ক্রিনের বাইরে থাকবে
+    _controlsAnimationController.value = 0.0;
+  }
+
+  @override
+  void dispose() {
+    _controlsAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _toggleFloatingControls() {
+    setState(() {
+      _areControlsVisible = !_areControlsVisible;
+      if (_areControlsVisible) {
+        _controlsAnimationController.forward();
+      } else {
+        _controlsAnimationController.reverse();
+      }
+    });
+  }
 
   void toggleLanguage() {
     setState(() {
@@ -59,92 +122,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
         height: double.infinity,
         child: Stack(
           children: [
-            // ১. ব্যাকগ্রাউন্ড ইমেজ
+            // ১. ব্যাকগ্রাউন্ড ইমেজ (স্ক্রিনে ট্যাপ ডিটেক্টর)
             Positioned.fill(
-              child: Image.asset(
-                isDark ? AppAssets.bgHomeDark : AppAssets.bgHome,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                errorBuilder: (context, error, stackTrace) =>
-                    _buildFallbackBackground(isDark),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleFloatingControls,
+                child: Image.asset(
+                  isDark ? AppAssets.bgHomeDark : AppAssets.bgHome,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (context, error, stackTrace) =>
+                      _buildFallbackBackground(isDark),
+                ),
               ),
             ),
 
             // ২. সূক্ষ্ম গ্রেডিয়েন্ট ওভারলে
             Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: isDark
-                        ? [
-                            Colors.black.withValues(alpha: 0.20),
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.40),
-                          ]
-                        : [
-                            AppColors.lightBgTop.withValues(alpha: 0.10),
-                            Colors.transparent,
-                            AppColors.lightBgBottom.withValues(alpha: 0.35),
-                          ],
-                    stops: const [0.0, 0.5, 1.0],
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: isDark
+                          ? [
+                              Colors.black.withValues(alpha: 0.20),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.40),
+                            ]
+                          : [
+                              AppColors.lightBgTop.withValues(alpha: 0.10),
+                              Colors.transparent,
+                              AppColors.lightBgBottom.withValues(alpha: 0.35),
+                            ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
                   ),
                 ),
               ),
             ),
 
-            // ৩. মূল কনটেন্ট (UI)
+            // ৩. মূল কনটেন্ট (টাইটেল, ফিউশন সূর্য, এবং ফুটার)
             SafeArea(
               child: Column(
                 children: [
-                  // ৩.১ হেডার কন্ট্রোল বার (Drawer, Theme, Language)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 10.0,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // ড্রয়ার বাটন
-                        _buildTactileCircleButton(
-                          icon: Icons.menu_rounded,
-                          iconColor: isDark
-                              ? AppColors.accentCyan
-                              : AppColors.primaryGreen,
-                          onTap: () => _scaffoldKey.currentState?.openDrawer(),
-                          isDark: isDark,
-                        ),
-
-                        // থিম টগল ও ভাষা বাটন
-                        Row(
-                          children: [
-                            _buildTactileCircleButton(
-                              customChild: ThemeToggleButton(
-                                isBangla: isBangla,
-                              ),
-                              onTap: null,
-                              isDark: isDark,
-                            ),
-                            const SizedBox(width: 10),
-                            _buildTactileLanguageButton(isDark),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 60),
 
                   const Spacer(flex: 3),
 
-                  // ৩.২ ব্যানারহীন ওপেন টাইটেল সেকশন
+                  // ৩.১ ব্যানারহীন ওপেন টাইটেল সেকশন
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // সোলার ফিউশন সূর্য আইকন (ট্যাপ করলে ড্রপডাউন টগল হবে)
+                        // সোলার ফিউশন সূর্য আইকন
                         GestureDetector(
                           onTap: toggleMenu,
                           behavior: HitTestBehavior.opaque,
@@ -216,7 +250,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const Spacer(flex: 5),
 
-                  // ৩.৩ ব্যানারহীন ওপেন বিসিএসআইআর ফুটার প্ল্যাটফর্ম
+                  // ৩.২ ব্যানারহীন ওপেন বিসিএসআইআর ফুটার প্ল্যাটফর্ম
                   Padding(
                     padding: const EdgeInsets.only(
                       bottom: 24.0,
@@ -278,7 +312,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // ৪. সোলার ফিউশন ড্রপ-ডাউন মেনু (সূর্যের ঠিক নিচে স্বাধীন লেয়ার হিসেবে অবস্থান করবে)
+            // ৪. সোলার ফিউশন ড্রপ-ডাউন মেনু
             Positioned(
               top: MediaQuery.of(context).size.height * 0.45,
               left: 50,
@@ -287,6 +321,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 isBangla: isBangla,
                 onToggle: toggleMenu,
                 onSelectOption: (option) => _navigateTo(context, option),
+              ),
+            ),
+
+            // ৫. ফ্লোটিং স্লাইডিং কন্ট্রোলস (ড্রয়ার বাটন - বাঁ দিক থেকে স্লাইড ইন/আউট)
+            Positioned(
+              top: 0,
+              left: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 10.0,
+                  ),
+                  child: SlideTransition(
+                    position: _leftSlideAnimation,
+                    child: _buildTactileCircleButton(
+                      icon: Icons.menu_rounded,
+                      iconColor: isDark
+                          ? AppColors.accentCyan
+                          : AppColors.primaryGreen,
+                      onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                      isDark: isDark,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // ৬. ফ্লোটিং স্লাইডিং কন্ট্রোলস (মোড ও ভাষা বাটন - ডান দিক থেকে স্লাইড ইন/আউট)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 10.0,
+                  ),
+                  child: SlideTransition(
+                    position: _rightSlideAnimation,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTactileCircleButton(
+                          customChild: ThemeToggleButton(isBangla: isBangla),
+                          onTap: null,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(width: 10),
+                        _buildTactileLanguageButton(isDark),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -513,6 +601,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (option == 'Installation' || option == 'স্থাপন') {
       _openScreen(InstallationScreen(isBangla: isBangla));
+      return;
+    }
+
+    if (option == 'Financial Analysis' ||
+        option == 'আর্থিক বিশ্লেষণ' ||
+        lower.contains('financial')) {
+      _openScreen(
+        FinancialAnalysisScreen(
+          isBangla: isBangla,
+          onToggleLanguage: toggleLanguage,
+        ),
+      );
       return;
     }
 
