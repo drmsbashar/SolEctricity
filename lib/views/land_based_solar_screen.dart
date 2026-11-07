@@ -13,6 +13,8 @@ import '../services/solar_radiation_service.dart';
 
 enum DrawingMode { boundary, obstacle }
 
+enum SolarSystemType { onGrid, hybrid, offGrid }
+
 class _PlannerItem {
   final String key;
   String nameBn;
@@ -93,6 +95,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   bool _isCoastal = false;
   String _locationPlaceName = '';
 
+  // 💰 বাজেট ও সিস্টেম টাইপ স্টেট
+  SolarSystemType _selectedSystemType = SolarSystemType.onGrid;
+  double _pricePerWatt = 60.0;
+
   late List<_PlannerItem> _plannerAppliances;
 
   @override
@@ -101,7 +107,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     _isBangla = widget.isBangla;
     _initPlannerAppliances();
 
-    // স্ক্রিন খোলার পর স্বয়ংক্রিয়ভাবে মোবাইলের বর্তমান লোকেশনে যাওয়া
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _goToCurrentLocation(silent: true);
     });
@@ -232,7 +237,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         key: 'refrigerator',
         nameBn: 'ফ্রিজ',
         nameEn: 'Refrigerator',
-        watt: 120,
+        watt: 140,
         icon: Icons.kitchen_rounded,
         isAc: true,
         quantity: 1,
@@ -264,6 +269,16 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         nameEn: 'Blender',
         watt: 400,
         icon: Icons.blender_rounded,
+        isAc: true,
+        quantity: 0,
+        hours: 0.0,
+      ),
+      _PlannerItem(
+        key: 'water_pump',
+        nameBn: 'পানির পাম্প (১.৫ HP)',
+        nameEn: 'Water Pump (1.5 HP)',
+        watt: 1400,
+        icon: Icons.water_drop_outlined,
         isAc: true,
         quantity: 0,
         hours: 0.0,
@@ -332,7 +347,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     return ll.LatLng(latSum / points.length, lngSum / points.length);
   }
 
-  // বাউন্ডারি পলিগনের উত্তর-দক্ষিণ এবং পূর্ব-পশ্চিম বিস্তার (মিটারে)
   Map<String, double> _calculateBoundingBoxSpans(List<ll.LatLng> points) {
     if (points.isEmpty) return {'ns': 0.0, 'ew': 0.0};
 
@@ -568,6 +582,20 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     );
   }
 
+  String _formatBudget(double totalAmountTaka) {
+    if (totalAmountTaka >= 100000) {
+      final double lakh = totalAmountTaka / 100000.0;
+      return _isBangla
+          ? '৳ ${lakh.toStringAsFixed(2)} লাখ'
+          : '৳ ${lakh.toStringAsFixed(2)} Lakh';
+    } else {
+      final double thousand = totalAmountTaka / 1000.0;
+      return _isBangla
+          ? '৳ ${thousand.toStringAsFixed(1)} হাজার'
+          : '৳ ${thousand.toStringAsFixed(1)}k';
+    }
+  }
+
   Future<void> _openSolarEstimationSheet(
     double netUsableSqM,
     bool isDark,
@@ -575,7 +603,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     final centroid = _calculateCentroid(_boundaryPoints);
     final spans = _calculateBoundingBoxSpans(_boundaryPoints);
 
-    // 🌟 ছাদ ও বাউন্ডারির আকার অনুযায়ী স্বয়ংক্রিয়ভাবে সর্বোত্তম প্যানেল ওয়াট নির্ধারণ
     final optimalWatt = SolarGeometryEngine.findOptimalModuleWatt(
       northSouthSpanM: spans['ns'] ?? 0.0,
       eastWestSpanM: spans['ew'] ?? 0.0,
@@ -665,10 +692,15 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                       ? Colors.orangeAccent
                       : AppColors.energyGreen);
 
+            // 💰 আর্থিক হিসাব
+            final double totalSystemWatt = systemCapacityKwp * 1000.0;
+            final double estimatedTotalBudgetTaka =
+                totalSystemWatt * _pricePerWatt;
+
             return DefaultTabController(
               length: 4,
               child: Container(
-                height: MediaQuery.of(context).size.height * 0.72,
+                height: MediaQuery.of(context).size.height * 0.78,
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
@@ -705,8 +737,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                         Expanded(
                           child: Text(
                             _isBangla
-                                ? 'সৌর সম্ভাব্যতা বিশ্লেষণ'
-                                : 'Solar Potential Analysis',
+                                ? 'সৌর সম্ভাব্যতা ও বাজেট বিশ্লেষণ'
+                                : 'Solar Potential & Budget Analysis',
                             style: TextStyle(
                               color: isDark
                                   ? AppColors.darkTextPrimary
@@ -785,7 +817,9 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                       tabs: [
                         Tab(
                           icon: const Icon(Icons.solar_power, size: 18),
-                          text: _isBangla ? 'সাইজিং' : 'Sizing',
+                          text: _isBangla
+                              ? 'সাইজিং ও বাজেট'
+                              : 'Sizing & Budget',
                         ),
                         Tab(
                           icon: const Icon(
@@ -811,10 +845,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                     Expanded(
                       child: TabBarView(
                         children: [
+                          // ---------------- 1. সাইজিং ও বাজেট ট্যাব ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // লেআউট তথ্য: সারি ১-এর বেশি হলে দূরত্ব দেখাবে, নতুবা শুধু একক সারি
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
@@ -841,8 +877,12 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                       Expanded(
                                         child: Text(
                                           _isBangla
-                                              ? 'লেআউট: ${rows}টি সারি × ${cols}টি কলাম | সারি দূরত্ব: ${rowPitch.toStringAsFixed(2)} মি'
-                                              : 'Layout: ${rows} Rows × ${cols} Cols | Row Pitch: ${rowPitch.toStringAsFixed(2)} m',
+                                              ? (rows > 1
+                                                    ? 'লেআউট: ${rows}টি সারি × ${cols}টি কলাম | সারি দূরত্ব: ${rowPitch.toStringAsFixed(2)} মি'
+                                                    : 'লেআউট: ${rows}টি সারি × ${cols}টি কলাম (একক সারি, ছায়া দূরত্ব প্রয়োজন নেই)')
+                                              : (rows > 1
+                                                    ? 'Layout: ${rows} Rows × ${cols} Cols | Row Pitch: ${rowPitch.toStringAsFixed(2)} m'
+                                                    : 'Layout: ${rows} Rows × ${cols} Cols (Single Row, No row-spacing needed)'),
                                           style: TextStyle(
                                             color: isDark
                                                 ? AppColors.darkTextSecondary
@@ -1100,9 +1140,185 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 12),
+
+                                // 🌟 সম্ভাব্য সিস্টেম বাজেট ও ইন্টারঅ্যাক্টিভ রেট স্লাইডার সেকশন
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? AppColors.darkInputBg
+                                        : AppColors.lightInputBg,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? AppColors.darkBorder
+                                          : AppColors.lightBorder,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.payments_outlined,
+                                                size: 18,
+                                                color: isDark
+                                                    ? AppColors.accentCyan
+                                                    : const Color(0xFF0284C7),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _isBangla
+                                                    ? 'সম্ভাব্য সিস্টেম বাজেট'
+                                                    : 'Estimated System Budget',
+                                                style: TextStyle(
+                                                  color: isDark
+                                                      ? AppColors
+                                                            .darkTextPrimary
+                                                      : AppColors
+                                                            .lightTextPrimary,
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Text(
+                                            _formatBudget(
+                                              estimatedTotalBudgetTaka,
+                                            ),
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? AppColors.solarGold
+                                                  : const Color(0xFFB45309),
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+
+                                      // সিস্টেম টাইপ সুইচ (অন-গ্রিড / হাইব্রিড / অফ-গ্রিড)
+                                      Row(
+                                        children: [
+                                          _buildSystemTypeChip(
+                                            type: SolarSystemType.onGrid,
+                                            label: _isBangla
+                                                ? 'অন-গ্রিড'
+                                                : 'On-Grid',
+                                            defaultRate: 60.0,
+                                            setSheetState: setSheetState,
+                                            isDark: isDark,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          _buildSystemTypeChip(
+                                            type: SolarSystemType.hybrid,
+                                            label: _isBangla
+                                                ? 'হাইব্রিড'
+                                                : 'Hybrid',
+                                            defaultRate: 90.0,
+                                            setSheetState: setSheetState,
+                                            isDark: isDark,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          _buildSystemTypeChip(
+                                            type: SolarSystemType.offGrid,
+                                            label: _isBangla
+                                                ? 'অফ-গ্রিড'
+                                                : 'Off-Grid',
+                                            defaultRate: 120.0,
+                                            setSheetState: setSheetState,
+                                            isDark: isDark,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+
+                                      // প্রতি ওয়াট বাজার রেট অ্যাডজাস্ট করার স্লাইডার
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            _isBangla
+                                                ? 'বাজার রেট (প্রতি ওয়াট):'
+                                                : 'Benchmark Rate (per Watt):',
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white60
+                                                  : AppColors
+                                                        .lightTextSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          Text(
+                                            '৳ ${_pricePerWatt.toStringAsFixed(0)} / W',
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? AppColors.accentCyan
+                                                  : const Color(0xFF0284C7),
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SliderTheme(
+                                        data: SliderTheme.of(context).copyWith(
+                                          trackHeight: 3.5,
+                                          thumbShape:
+                                              const RoundSliderThumbShape(
+                                                enabledThumbRadius: 6.5,
+                                              ),
+                                          activeTrackColor: isDark
+                                              ? AppColors.accentCyan
+                                              : const Color(0xFF0284C7),
+                                          thumbColor: isDark
+                                              ? AppColors.accentCyan
+                                              : const Color(0xFF0284C7),
+                                        ),
+                                        child: Slider(
+                                          value: _pricePerWatt,
+                                          min: 35.0,
+                                          max: 160.0,
+                                          divisions: 125,
+                                          onChanged: (val) {
+                                            setSheetState(() {
+                                              _pricePerWatt = val;
+                                            });
+                                            setState(() {
+                                              _pricePerWatt = val;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      Text(
+                                        _isBangla
+                                            ? '* এটি আনুমানিক মোট প্রকল্প ব্যয় (প্যানেল, ইনভার্টার, মাউন্টিং ও ইনস্টলেশনসহ)।'
+                                            : '* Estimated EPC project benchmark (including panels, inverters, structure & cabling).',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white38
+                                              : Colors.grey.shade500,
+                                          fontSize: 9.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
+
+                          // ---------------- 2. ব্যবহার ট্যাবের অংশ ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1209,7 +1425,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                 const SizedBox(height: 10),
                                 Text(
                                   _isBangla
-                                      ? 'বক্সে ক্লিক করে ওয়াট নির্ধারণ করুন এবং AC/DC সিলেক্ট করুন:'
+                                      ? 'বক্সে ক্লিক করে ওয়াট পরিবর্তন করুন এবং AC/DC নির্ধারণ করুন:'
                                       : 'Tap box to edit Watt. Select AC/DC type:',
                                   style: TextStyle(
                                     fontSize: 11,
@@ -1693,6 +1909,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                               ],
                             ),
                           ),
+
+                          // ---------------- 3. উৎপাদন ট্যাবের অংশ ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1877,6 +2095,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                               ],
                             ),
                           ),
+
+                          // ---------------- 4. ইনস্টলেশন ট্যাবের অংশ ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2020,6 +2240,60 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         setState(() => _isModalOpen = false);
       }
     });
+  }
+
+  Widget _buildSystemTypeChip({
+    required SolarSystemType type,
+    required String label,
+    required double defaultRate,
+    required StateSetter setSheetState,
+    required bool isDark,
+  }) {
+    final bool isSelected = _selectedSystemType == type;
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setSheetState(() {
+            _selectedSystemType = type;
+            _pricePerWatt = defaultRate;
+          });
+          setState(() {
+            _selectedSystemType = type;
+            _pricePerWatt = defaultRate;
+          });
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark
+                      ? AppColors.accentCyan.withValues(alpha: 0.2)
+                      : const Color(0xFF0284C7).withValues(alpha: 0.12))
+                : (isDark ? Colors.black26 : Colors.white),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected
+                  ? (isDark ? AppColors.accentCyan : const Color(0xFF0284C7))
+                  : (isDark ? Colors.white12 : Colors.black12),
+              width: isSelected ? 1.4 : 1.0,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected
+                    ? (isDark ? AppColors.accentCyan : const Color(0xFF0284C7))
+                    : (isDark ? Colors.white60 : Colors.black87),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildStatCard({
@@ -2223,7 +2497,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
       ),
       body: Stack(
         children: [
-          // 🌍 সম্পূর্ণ সাবস্ক্রিপশন-ফ্রি স্যাটেলাইট ও ওপেনস্ট্রিটম্যাপ ভিউ
           Positioned.fill(
             child: FlutterMap(
               mapController: _mapController,
@@ -2251,8 +2524,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
               ],
             ),
           ),
-
-          // 🎛️ ফ্লোটিং টুলস (স্যাটেলাইট/ম্যাপ টগল ও বর্তমান জিপিএস লোকেশন বাটন)
           Positioned(
             right: 14,
             top: 70,
@@ -2308,7 +2579,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
               ),
             ),
           ),
-
           Positioned(
             left: 14,
             right: 70,

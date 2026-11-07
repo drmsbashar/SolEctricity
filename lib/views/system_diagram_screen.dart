@@ -97,7 +97,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     setState(() => _isExporting = true);
 
     try {
-      // প্রিন্টের জন্য সাদা ব্যাকগ্রাউন্ড ও পূর্ণাঙ্গ তথ্যসহ ডায়াগ্রামের হাই-রেজোলিউশন ইমেজ তৈরি
       final recorder = ui.PictureRecorder();
       final printCanvas = Canvas(
         recorder,
@@ -109,13 +108,12 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         params: widget.params,
         isBangla: _isBangla,
         isDark: false,
-        isForPrint: true, // সাদা ব্যাকগ্রাউন্ড ও ক্যাবল লিজেন্ডসহ
+        isForPrint: true,
       );
 
       printPainter.paint(printCanvas, const Size(vWidth, vHeight));
 
       final picture = recorder.endRecording();
-      // ৩ গুণ রেজোলিউশন যাতে ব্লকের ভেতরের প্রতিটি টেক্সট ক্রিস্টাল ক্লিয়ার আসে
       final img = await picture.toImage(
         (vWidth * 2.5).toInt(),
         (vHeight * 2.5).toInt(),
@@ -139,10 +137,15 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
 
   void _showDetailModal({
     required String title,
-    required Widget Function(bool isDark) contentBuilder,
+    required Widget Function(
+      bool isDark,
+      TransformationController modalController,
+    )
+    contentBuilder,
     Color headerColor = const Color(0xFF10B981),
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final TransformationController modalController = TransformationController();
 
     showGeneralDialog(
       context: context,
@@ -179,8 +182,20 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                 ),
               ],
             ),
+            actions: [
+              IconButton(
+                tooltip: _isBangla ? 'রিসেট ভিউ' : 'Reset View',
+                icon: const Icon(
+                  Icons.center_focus_strong_rounded,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  modalController.value = Matrix4.identity();
+                },
+              ),
+            ],
           ),
-          body: SafeArea(child: contentBuilder(isDark)),
+          body: SafeArea(child: contentBuilder(isDark, modalController)),
         );
       },
     );
@@ -195,8 +210,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         ? 'মোট ${result.totalPanels}টি প্যানেল ($pvsটি সিরিজে × $pvpটি প্যারালালে)'
         : 'Total ${result.totalPanels} Panels ($pvs in Series × $pvp in Parallel)';
 
-    // গণনার সংখ্যার ওপর ভিত্তি করে ক্যানভাসের ডায়নামিক দৈর্ঘ্য-প্রস্থ নির্ধারণ
-    final double canvasWidth = math.max(600.0, 180.0 + (pvs * 130.0));
+    final double canvasWidth = math.max(680.0, (pvs * 130.0) + 215.0);
     final double canvasHeight = math.max(380.0, 120.0 + (pvp * 185.0));
 
     _showDetailModal(
@@ -204,7 +218,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'সোলার প্যানেল বাস্তব সংযোগ চিত্র'
           : 'Solar PV Wiring Blueprint',
       headerColor: const Color(0xFF0284C7),
-      contentBuilder: (isDark) => Column(
+      contentBuilder: (isDark, modalController) => Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -241,9 +255,9 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
-          // ইন্টারেক্টিভ জুম ও প্যান কন্টেইনার
           Expanded(
             child: InteractiveViewer(
+              transformationController: modalController,
               constrained: false,
               boundaryMargin: const EdgeInsets.all(50),
               minScale: 0.3,
@@ -304,8 +318,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         ? 'মোট ${result.totalBatteries}টি ব্যাটারি ($bsটি সিরিজে × $bpটি প্যারালালে = ${widget.params.systemVoltage.toInt()}V)'
         : 'Total ${result.totalBatteries} Batteries ($bs in Series × $bp in Parallel = ${widget.params.systemVoltage.toInt()}V)';
 
-    // গণনার সংখ্যার ওপর ভিত্তি করে ক্যানভাসের ডায়নামিক দৈর্ঘ্য-প্রস্থ নির্ধারণ
-    final double canvasWidth = math.max(600.0, 180.0 + (bs * 140.0));
+    final double canvasWidth = math.max(680.0, (bs * 140.0) + 215.0);
     final double canvasHeight = math.max(380.0, 120.0 + (bp * 145.0));
 
     _showDetailModal(
@@ -313,7 +326,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'ব্যাটারি ব্যাংক বাস্তব সংযোগ চিত্র'
           : 'Battery Bank Wiring Blueprint',
       headerColor: const Color(0xFFEAB308),
-      contentBuilder: (isDark) => Column(
+      contentBuilder: (isDark, modalController) => Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -350,9 +363,9 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
-          // ইন্টারেক্টিভ জুম ও প্যান কন্টেইনার
           Expanded(
             child: InteractiveViewer(
+              transformationController: modalController,
               constrained: false,
               boundaryMargin: const EdgeInsets.all(50),
               minScale: 0.3,
@@ -462,7 +475,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'চার্জ কন্ট্রোলার সংযোগ নির্দেশিকা'
           : 'Charge Controller Wiring Ports',
       headerColor: const Color(0xFF16A34A),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,7 +553,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'ইনভার্টার সংযোগ নির্দেশিকা' : 'Inverter Wiring Guide',
       headerColor: const Color(0xFF8B5CF6),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -577,7 +590,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'হাইব্রিড ইনভার্টার নির্দেশিকা'
           : 'Hybrid Inverter Guide',
       headerColor: const Color(0xFF8B5CF6),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -610,7 +623,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
           ? 'দ্বিমুখী নেট মিটার নির্দেশিকা'
           : 'Bi-directional Net Meter',
       headerColor: const Color(0xFF0D9488),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -641,7 +654,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'জাতীয় পাওয়ার গ্রিড সংযোগ' : 'National Utility Grid',
       headerColor: const Color(0xFF10B981),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -672,7 +685,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'ডিসি লোড সংযোগ নির্দেশিকা' : 'DC Loads Wiring Guide',
       headerColor: const Color(0xFF06B6D4),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -703,7 +716,7 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     _showDetailModal(
       title: _isBangla ? 'এসি লোড সংযোগ নির্দেশিকা' : 'AC Loads Wiring Guide',
       headerColor: const Color(0xFFD97706),
-      contentBuilder: (isDark) => SingleChildScrollView(
+      contentBuilder: (isDark, modalController) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -1045,7 +1058,6 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                                       isForPrint: false,
                                     ),
                                   ),
-                                  // টাচ হটস্পটসমূহ
                                   if (!isGridTied && !isHybrid) ...[
                                     _buildTouchOverlay(
                                       offGridPvRect,
