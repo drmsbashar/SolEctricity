@@ -38,9 +38,15 @@ class AppliancePresetsData {
       svgPath: 'assets/icons/light.png',
       presets: [
         AppliancePreset(
-          nameBn: 'LED বাল্ব',
-          nameEn: 'LED Bulb',
+          nameBn: 'LED বাল্ব (সাধারণ)',
+          nameEn: 'LED Bulb (9W-12W)',
           defaultWatt: 12,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: 'LED বাল্ব (উচ্চ আলো)',
+          nameEn: 'LED Bulb (High Watt)',
+          defaultWatt: 18,
           defaultIsAC: true,
         ),
         AppliancePreset(
@@ -80,7 +86,7 @@ class AppliancePresetsData {
         AppliancePreset(
           nameBn: 'সাধারণ সিলিং ফ্যান',
           nameEn: 'Standard Ceiling Fan',
-          defaultWatt: 75,
+          defaultWatt: 85,
           defaultIsAC: true,
         ),
         AppliancePreset(
@@ -90,7 +96,7 @@ class AppliancePresetsData {
           defaultIsAC: true,
         ),
         AppliancePreset(
-          nameBn: 'নিষ্কাশন ফ্যান',
+          nameBn: 'নিষ্কাশন ফ্যান (Exhaust)',
           nameEn: 'Exhaust Fan',
           defaultWatt: 35,
           defaultIsAC: true,
@@ -134,9 +140,15 @@ class AppliancePresetsData {
       svgPath: 'assets/icons/computer.png',
       presets: [
         AppliancePreset(
-          nameBn: 'ডেস্কটপ পিসি',
-          nameEn: 'Desktop PC',
+          nameBn: 'ডেস্কটপ পিসি (মনিটরসহ)',
+          nameEn: 'Desktop PC with Monitor',
           defaultWatt: 130,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: 'অল-ইন-ওয়ান পিসি',
+          nameEn: 'All-in-One PC',
+          defaultWatt: 85,
           defaultIsAC: true,
         ),
         AppliancePreset(
@@ -146,9 +158,9 @@ class AppliancePresetsData {
           defaultIsAC: true,
         ),
         AppliancePreset(
-          nameBn: 'অল-ইন-ওয়ান পিসি',
-          nameEn: 'All-in-One PC',
-          defaultWatt: 85,
+          nameBn: 'মিনি সার্ভার / নেটওয়ার্ক র্যাক',
+          nameEn: 'Mini Server / Network Rack',
+          defaultWatt: 180,
           defaultIsAC: true,
         ),
       ],
@@ -162,8 +174,8 @@ class AppliancePresetsData {
       svgPath: 'assets/icons/laptop.png',
       presets: [
         AppliancePreset(
-          nameBn: 'ল্যাপটপ',
-          nameEn: 'Laptop',
+          nameBn: 'সাধারণ ল্যাপটপ',
+          nameEn: 'Standard Laptop',
           defaultWatt: 65,
           defaultIsAC: true,
         ),
@@ -177,6 +189,12 @@ class AppliancePresetsData {
           nameBn: 'ট্যাবলেট / আইপ্যাড',
           nameEn: 'Tablet / iPad',
           defaultWatt: 15,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: 'মোবাইল ফাস্ট চার্জার',
+          nameEn: 'Mobile Fast Charger',
+          defaultWatt: 25,
           defaultIsAC: true,
         ),
       ],
@@ -201,6 +219,12 @@ class AppliancePresetsData {
           defaultWatt: 450,
           defaultIsAC: true,
         ),
+        AppliancePreset(
+          nameBn: 'ফটোকপিয়ার মেশিন',
+          nameEn: 'Photocopier Machine',
+          defaultWatt: 900,
+          defaultIsAC: true,
+        ),
       ],
     ),
 
@@ -218,15 +242,27 @@ class AppliancePresetsData {
           defaultIsAC: true,
         ),
         AppliancePreset(
-          nameBn: '১.০ টন এসি',
-          nameEn: '1.0 Ton AC',
-          defaultWatt: 950,
+          nameBn: '১.০ টন ইনভার্টার এসি',
+          nameEn: '1.0 Ton Inverter AC',
+          defaultWatt: 850,
           defaultIsAC: true,
         ),
         AppliancePreset(
-          nameBn: '১.৫ টন এসি',
-          nameEn: '1.5 Ton AC',
-          defaultWatt: 1450,
+          nameBn: '১.৫ টন ইনভার্টার এসি',
+          nameEn: '1.5 Ton Inverter AC',
+          defaultWatt: 1350,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: '১.০ টন সাধারণ এসি',
+          nameEn: '1.0 Ton Non-Inverter AC',
+          defaultWatt: 1100,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: '১.৫ টন সাধারণ এসি',
+          nameEn: '1.5 Ton Non-Inverter AC',
+          defaultWatt: 1600,
           defaultIsAC: true,
         ),
       ],
@@ -240,21 +276,27 @@ class AppliancePresetsData {
       svgPath: 'assets/icons/fridge.png',
       presets: [
         AppliancePreset(
+          nameBn: 'বেভারেজ ফ্রিজ',
+          nameEn: 'Beverage Cooler',
+          defaultWatt: 80,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
           nameBn: 'ইনভার্টার রেফ্রিজারেটর',
           nameEn: 'Inverter Refrigerator',
-          defaultWatt: 100,
+          defaultWatt: 140,
           defaultIsAC: true,
         ),
         AppliancePreset(
           nameBn: 'সাধারণ রেফ্রিজারেটর',
           nameEn: 'Non-Inverter Refrigerator',
-          defaultWatt: 200,
+          defaultWatt: 250,
           defaultIsAC: true,
         ),
         AppliancePreset(
           nameBn: 'ডিপ ফ্রিজার',
           nameEn: 'Chest / Deep Freezer',
-          defaultWatt: 180,
+          defaultWatt: 250,
           defaultIsAC: true,
         ),
       ],
@@ -271,6 +313,12 @@ class AppliancePresetsData {
           nameBn: 'রাইস কুকার',
           nameEn: 'Rice Cooker',
           defaultWatt: 700,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: 'ইলেকট্রিক কেটলি',
+          nameEn: 'Electric Kettle',
+          defaultWatt: 1200,
           defaultIsAC: true,
         ),
         AppliancePreset(
@@ -342,7 +390,7 @@ class AppliancePresetsData {
         AppliancePreset(
           nameBn: 'ওয়াইফাই রাউটার ও ওএনইউ',
           nameEn: 'Wi-Fi Router & ONU',
-          defaultWatt: 12,
+          defaultWatt: 15,
           defaultIsAC: true,
         ),
         AppliancePreset(
@@ -354,13 +402,25 @@ class AppliancePresetsData {
         AppliancePreset(
           nameBn: 'পানির পাম্প (০.৫ HP)',
           nameEn: 'Water Pump (0.5 HP)',
-          defaultWatt: 375,
+          defaultWatt: 450,
           defaultIsAC: true,
         ),
         AppliancePreset(
           nameBn: 'পানির পাম্প (১.০ HP)',
           nameEn: 'Water Pump (1.0 HP)',
-          defaultWatt: 750,
+          defaultWatt: 900,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: 'পানির পাম্প (১.৫ HP)',
+          nameEn: 'Water Pump (1.5 HP)',
+          defaultWatt: 1400,
+          defaultIsAC: true,
+        ),
+        AppliancePreset(
+          nameBn: 'ইলেকট্রিক আয়রন (ইস্ত্রি)',
+          nameEn: 'Electric Iron',
+          defaultWatt: 1000,
           defaultIsAC: true,
         ),
         AppliancePreset(

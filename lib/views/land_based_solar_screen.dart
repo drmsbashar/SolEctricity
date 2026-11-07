@@ -1,27 +1,25 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' as ll;
 
 import '../constants/app_colors.dart';
 import '../services/location_search_service.dart';
 import '../services/solar_calculation_service.dart';
 import '../services/solar_radiation_service.dart';
-import '../widgets/theme_toggle_button.dart';
 
 enum DrawingMode { boundary, obstacle }
 
-// প্ল্যানারের প্রতিটি উপকরণের ডেটা মডেল
 class _PlannerItem {
   final String key;
   String nameBn;
   String nameEn;
   double watt;
   final IconData icon;
-  bool isAc; // AC নাকি DC
+  bool isAc;
   int quantity;
   double hours;
 
@@ -36,10 +34,8 @@ class _PlannerItem {
     this.hours = 0.0,
   });
 
-  // কাঁচা শক্তি (Wh)
   double get rawDailyWh => watt * quantity * hours;
 
-  // কার্যকর দৈনিক শক্তি (AC হলে ইনভার্টারের ৮৮% দক্ষতা / ১২% রূপান্তর অপচয় সমন্বিত)
   double get effectiveDailyWh {
     final double raw = rawDailyWh;
     return isAc ? (raw / 0.88) : raw;
@@ -57,7 +53,7 @@ class LandBasedSolarScreen extends StatefulWidget {
 
 class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   late bool _isBangla;
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
 
   final TextEditingController _searchController = TextEditingController();
   List<PlaceSearchResult> _searchResults = [];
@@ -69,18 +65,19 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
 
   DrawingMode _currentMode = DrawingMode.boundary;
 
-  final List<LatLng> _boundaryPoints = [];
-  final List<List<LatLng>> _obstacles = [];
-  List<LatLng> _currentObstaclePoints = [];
+  // 🗺️ লেয়ার এবং লাইভ লোকেশন স্টেট
+  bool _isSatellite = true;
+  bool _isLocatingUser = false;
+
+  final List<ll.LatLng> _boundaryPoints = [];
+  final List<List<ll.LatLng>> _obstacles = [];
+  List<ll.LatLng> _currentObstaclePoints = [];
 
   double _totalAreaSqM = 0.0;
   double _obstacleAreaSqM = 0.0;
 
-  BitmapDescriptor? _whiteDotIcon;
-  // পূর্বের মতো ডিফল্ট স্থির পজিশন
-  static const LatLng _initialPosition = LatLng(23.8103, 90.4125);
+  static const ll.LatLng _initialPosition = ll.LatLng(23.8103, 90.4125);
 
-  // ⚡ সোলার সাইজিং ও নাসা ডাটা
   double _selectedModuleEfficiency = 0.215;
   int _selectedModuleWatt = 550;
   bool _isLoadingNasa = false;
@@ -96,7 +93,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
   bool _isCoastal = false;
   String _locationPlaceName = '';
 
-  // ⚡ দৈনিক লোড প্ল্যানার তালিকা (১২টি উপকরণ)
   late List<_PlannerItem> _plannerAppliances;
 
   @override
@@ -104,7 +100,60 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     super.initState();
     _isBangla = widget.isBangla;
     _initPlannerAppliances();
-    _createWhiteDotIcon();
+
+    // স্ক্রিন খোলার পর স্বয়ংক্রিয়ভাবে মোবাইলের বর্তমান লোকেশনে যাওয়া
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _goToCurrentLocation(silent: true);
+    });
+  }
+
+  Future<void> _goToCurrentLocation({bool silent = false}) async {
+    setState(() => _isLocatingUser = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!silent && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _isBangla
+                    ? 'ফোনের লোকেশন (GPS) চালু করুন।'
+                    : 'Please turn on device location (GPS).',
+              ),
+            ),
+          );
+        }
+        setState(() => _isLocatingUser = false);
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() => _isLocatingUser = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _isLocatingUser = false);
+        return;
+      }
+
+      final Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
+      );
+
+      final target = ll.LatLng(position.latitude, position.longitude);
+      if (mounted) {
+        setState(() => _isLocatingUser = false);
+        _mapController.move(target, 18.5);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLocatingUser = false);
+    }
   }
 
   void _initPlannerAppliances() {
@@ -238,30 +287,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     super.dispose();
   }
 
-  Future<void> _createWhiteDotIcon() async {
-    const int size = 12;
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-
-    final dotPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(const Offset(size / 2, size / 2), size / 2, dotPaint);
-
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(size, size);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    final Uint8List bytes = byteData!.buffer.asUint8List();
-
-    if (mounted) {
-      setState(() {
-        _whiteDotIcon = BitmapDescriptor.bytes(bytes);
-      });
-    }
-  }
-
-  double _calculatePolygonArea(List<LatLng> points) {
+  double _calculatePolygonArea(List<ll.LatLng> points) {
     if (points.length < 3) return 0.0;
 
     const double earthRadius = 6378137.0;
@@ -295,7 +321,7 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     _obstacleAreaSqM = obsTotal;
   }
 
-  LatLng _calculateCentroid(List<LatLng> points) {
+  ll.LatLng _calculateCentroid(List<ll.LatLng> points) {
     if (points.isEmpty) return _initialPosition;
     double latSum = 0.0;
     double lngSum = 0.0;
@@ -303,10 +329,33 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
       latSum += p.latitude;
       lngSum += p.longitude;
     }
-    return LatLng(latSum / points.length, lngSum / points.length);
+    return ll.LatLng(latSum / points.length, lngSum / points.length);
   }
 
-  void _onMapTapped(LatLng position) {
+  // বাউন্ডারি পলিগনের উত্তর-দক্ষিণ এবং পূর্ব-পশ্চিম বিস্তার (মিটারে)
+  Map<String, double> _calculateBoundingBoxSpans(List<ll.LatLng> points) {
+    if (points.isEmpty) return {'ns': 0.0, 'ew': 0.0};
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (var p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+
+    final double nsSpanM = (maxLat - minLat) * 111320.0;
+    final double avgLatRad = ((minLat + maxLat) / 2.0) * (math.pi / 180.0);
+    final double ewSpanM = (maxLng - minLng) * 111320.0 * math.cos(avgLatRad);
+
+    return {'ns': nsSpanM, 'ew': ewSpanM};
+  }
+
+  void _onMapTapped(TapPosition tapPosition, ll.LatLng position) {
     if (_isInteractingWithControls || _isModalOpen) return;
 
     if (_isSearchBarVisible) {
@@ -400,12 +449,8 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
       _searchController.clear();
     });
 
-    final target = LatLng(place.latitude, place.longitude);
-    _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: target, zoom: 19.5),
-      ),
-    );
+    final target = ll.LatLng(place.latitude, place.longitude);
+    _mapController.move(target, 18.5);
   }
 
   Widget _buildControlWrapper({required Widget child}) {
@@ -528,8 +573,18 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     bool isDark,
   ) async {
     final centroid = _calculateCentroid(_boundaryPoints);
+    final spans = _calculateBoundingBoxSpans(_boundaryPoints);
+
+    // 🌟 ছাদ ও বাউন্ডারির আকার অনুযায়ী স্বয়ংক্রিয়ভাবে সর্বোত্তম প্যানেল ওয়াট নির্ধারণ
+    final optimalWatt = SolarGeometryEngine.findOptimalModuleWatt(
+      northSouthSpanM: spans['ns'] ?? 0.0,
+      eastWestSpanM: spans['ew'] ?? 0.0,
+      netUsableAreaSqM: netUsableSqM,
+      latitude: centroid.latitude,
+    );
 
     setState(() {
+      _selectedModuleWatt = optimalWatt;
       _isLoadingNasa = true;
       _isModalOpen = true;
     });
@@ -567,16 +622,21 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
         onTap: () {},
         child: StatefulBuilder(
           builder: (context, setSheetState) {
-            final double dynamicPackingFactor =
-                SolarCalculationService.calculateDynamicPackingFactor(
-                  centroid.latitude,
-                );
-            final double effectivePanelAreaSqM =
-                netUsableSqM * dynamicPackingFactor;
+            final layoutResult = SolarGeometryEngine.calculateDiscreteLayout(
+              northSouthSpanM: spans['ns'] ?? 0.0,
+              eastWestSpanM: spans['ew'] ?? 0.0,
+              netUsableAreaSqM: netUsableSqM,
+              latitude: centroid.latitude,
+              moduleWatt: _selectedModuleWatt,
+            );
+
+            final int totalModules = layoutResult['totalPanels'] as int;
             final double systemCapacityKwp =
-                effectivePanelAreaSqM * _selectedModuleEfficiency;
-            final int totalModules =
-                ((systemCapacityKwp * 1000) / _selectedModuleWatt).round();
+                layoutResult['actualKwp'] as double;
+            final int rows = layoutResult['rows'] as int;
+            final int cols = layoutResult['cols'] as int;
+            final double rowPitch = layoutResult['pitchM'] as double;
+            final double optimalTilt = layoutResult['tiltDeg'] as double;
 
             final double tempDerate =
                 SolarCalculationService.calculateTempDerateFactor(_ambientTemp);
@@ -588,10 +648,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
             final double dailyGenerationWh = dailyGenerationKwh * 1000.0;
             final double monthlyGenerationKwh = dailyGenerationKwh * 30;
 
-            final double optimalTilt =
-                SolarCalculationService.calculateOptimalTilt(centroid.latitude);
-
-            // মোট কার্যকর শক্তি চাহিদা (AC লস সমন্বিত)
             final double totalPlannedEffectiveWh = _plannerAppliances.fold(
               0.0,
               (sum, item) => sum + item.effectiveDailyWh,
@@ -660,7 +716,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                             ),
                           ),
                         ),
-                        // নাসা ক্লাইমেট ডাটা ব্যাজ
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -756,7 +811,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                     Expanded(
                       child: TabBarView(
                         children: [
-                          // ---------------- ট্যাব ১: সাইজিং ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -787,13 +841,14 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                       Expanded(
                                         child: Text(
                                           _isBangla
-                                              ? 'অক্ষাংশ: ${centroid.latitude.toStringAsFixed(2)}°N | প্যাকিং: ${(dynamicPackingFactor * 100).toStringAsFixed(1)}%'
-                                              : 'Lat: ${centroid.latitude.toStringAsFixed(2)}°N | Packing: ${(dynamicPackingFactor * 100).toStringAsFixed(1)}%',
+                                              ? 'লেআউট: ${rows}টি সারি × ${cols}টি কলাম | সারি দূরত্ব: ${rowPitch.toStringAsFixed(2)} মি'
+                                              : 'Layout: ${rows} Rows × ${cols} Cols | Row Pitch: ${rowPitch.toStringAsFixed(2)} m',
                                           style: TextStyle(
                                             color: isDark
                                                 ? AppColors.darkTextSecondary
                                                 : AppColors.lightTextSecondary,
                                             fontSize: 11,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ),
@@ -986,8 +1041,9 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                           : 'DC Capacity',
                                       value:
                                           '${systemCapacityKwp.toStringAsFixed(2)} kWp',
-                                      subtitle:
-                                          'কার্যকর: ${effectivePanelAreaSqM.toStringAsFixed(1)} m²',
+                                      subtitle: _isBangla
+                                          ? 'মোট বিন্যাস: ${rows}×${cols} গ্রিড'
+                                          : 'Layout: ${rows}×${cols} Grid',
                                       icon: Icons.flash_on_rounded,
                                       color: isDark
                                           ? AppColors.accentCyan
@@ -1047,13 +1103,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                               ],
                             ),
                           ),
-
-                          // ---------------- 🌟 ট্যাব ২: ব্যবহার প্ল্যানার ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // এনার্জি বাজেট ও লস স্ট্যাটাস বার
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
@@ -1167,8 +1220,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-
-                                // ১২টি উপকরণের নতুন বিন্যাসের তালিকা
                                 ListView.separated(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
@@ -1230,8 +1281,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                           : Colors.grey),
                                               ),
                                               const SizedBox(width: 8),
-
-                                              // ১. উপকরণের নাম ও তার ঠিক নিচে মোট Wh
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
@@ -1278,8 +1327,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                   ],
                                                 ),
                                               ),
-
-                                              // ২. ওয়াট ইনপুট বক্স (নামের পাশে)
                                               InkWell(
                                                 onTap: () => _editApplianceWatt(
                                                   context,
@@ -1353,8 +1400,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-
-                                              // ৩. AC / DC সিলেক্টর (ওয়াট বক্স এবং সংখ্যার মাঝখানে)
                                               Container(
                                                 decoration: BoxDecoration(
                                                   color: isDark
@@ -1375,7 +1420,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
-                                                    // AC বাটন
                                                     InkWell(
                                                       onTap: () {
                                                         if (!item.isAc) {
@@ -1425,7 +1469,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                         ),
                                                       ),
                                                     ),
-                                                    // DC বাটন
                                                     InkWell(
                                                       onTap: () {
                                                         if (item.isAc) {
@@ -1479,8 +1522,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-
-                                              // ৪. সংখ্যা নির্বাচন (+ / -)
                                               Row(
                                                 children: [
                                                   InkWell(
@@ -1563,8 +1604,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                                               ),
                                             ],
                                           ),
-
-                                          // ৫. স্লাইডার কন্ট্রোল
                                           if (item.quantity > 0) ...[
                                             const SizedBox(height: 6),
                                             Container(
@@ -1654,8 +1693,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                               ],
                             ),
                           ),
-
-                          // ---------------- ট্যাব ৩: উৎপাদন ও আবহাওয়া ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1840,8 +1877,6 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
                               ],
                             ),
                           ),
-
-                          // ---------------- ট্যাব ৪: ইনস্টলেশন গাইড ----------------
                           SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2059,16 +2094,15 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     final double netUsableSqM = math.max(0.0, _totalAreaSqM - _obstacleAreaSqM);
     final double netUsableSqFt = netUsableSqM * 10.7639;
 
-    final Set<Polygon> polygons = {};
+    final List<Polygon> polygons = [];
 
     if (_boundaryPoints.length >= 3) {
       polygons.add(
         Polygon(
-          polygonId: const PolygonId('boundary_polygon'),
           points: _boundaryPoints,
-          strokeWidth: 2,
-          strokeColor: AppColors.solarGold,
-          fillColor: isDark
+          borderColor: AppColors.solarGold,
+          borderStrokeWidth: 2,
+          color: isDark
               ? AppColors.accentCyan.withValues(alpha: 0.22)
               : AppColors.energyGreen.withValues(alpha: 0.25),
         ),
@@ -2078,11 +2112,10 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     for (int i = 0; i < _obstacles.length; i++) {
       polygons.add(
         Polygon(
-          polygonId: PolygonId('obstacle_$i'),
           points: _obstacles[i],
-          strokeWidth: 2,
-          strokeColor: AppColors.alertRed,
-          fillColor: AppColors.alertRed.withValues(alpha: 0.38),
+          borderColor: AppColors.alertRed,
+          borderStrokeWidth: 2,
+          color: AppColors.alertRed.withValues(alpha: 0.38),
         ),
       );
     }
@@ -2090,72 +2123,59 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
     if (_currentObstaclePoints.length >= 3) {
       polygons.add(
         Polygon(
-          polygonId: const PolygonId('current_obstacle'),
           points: _currentObstaclePoints,
-          strokeWidth: 2,
-          strokeColor: Colors.orangeAccent,
-          fillColor: AppColors.alertRed.withValues(alpha: 0.38),
+          borderColor: Colors.orangeAccent,
+          borderStrokeWidth: 2,
+          color: AppColors.alertRed.withValues(alpha: 0.38),
         ),
       );
     }
 
-    final Set<Polyline> polylines = {};
+    final List<Polyline> polylines = [];
     if (_boundaryPoints.length >= 2) {
       polylines.add(
         Polyline(
-          polylineId: const PolylineId('boundary_line'),
           points: _boundaryPoints,
           color: AppColors.solarGold,
-          width: 3,
+          strokeWidth: 3,
         ),
       );
     }
     if (_currentObstaclePoints.length >= 2) {
       polylines.add(
         Polyline(
-          polylineId: const PolylineId('current_obs_line'),
           points: _currentObstaclePoints,
           color: AppColors.alertRed,
-          width: 3,
+          strokeWidth: 3,
         ),
       );
     }
 
-    final Set<Marker> markers = {};
-    if (_whiteDotIcon != null) {
-      for (int i = 0; i < _boundaryPoints.length; i++) {
+    final List<Marker> markers = [];
+    void addDots(List<ll.LatLng> pts) {
+      for (var p in pts) {
         markers.add(
           Marker(
-            markerId: MarkerId('b_dot_$i'),
-            position: _boundaryPoints[i],
-            icon: _whiteDotIcon!,
-            anchor: const Offset(0.5, 0.5),
-          ),
-        );
-      }
-      for (int j = 0; j < _obstacles.length; j++) {
-        for (int k = 0; k < _obstacles[j].length; k++) {
-          markers.add(
-            Marker(
-              markerId: MarkerId('obs_${j}_dot_$k'),
-              position: _obstacles[j][k],
-              icon: _whiteDotIcon!,
-              anchor: const Offset(0.5, 0.5),
+            point: p,
+            width: 12,
+            height: 12,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 3)],
+              ),
             ),
-          );
-        }
-      }
-      for (int i = 0; i < _currentObstaclePoints.length; i++) {
-        markers.add(
-          Marker(
-            markerId: MarkerId('cur_obs_dot_$i'),
-            position: _currentObstaclePoints[i],
-            icon: _whiteDotIcon!,
-            anchor: const Offset(0.5, 0.5),
           ),
         );
       }
     }
+
+    addDots(_boundaryPoints);
+    for (var obs in _obstacles) {
+      addDots(obs);
+    }
+    addDots(_currentObstaclePoints);
 
     final bool hasAnyPoints =
         _boundaryPoints.isNotEmpty ||
@@ -2203,26 +2223,95 @@ class _LandBasedSolarScreenState extends State<LandBasedSolarScreen> {
       ),
       body: Stack(
         children: [
-          // 👈 পূর্বের মতো নিরাপদ গুগল ম্যাপস কনফিগারেশন (বিলিং ট্র্যাকিং ছাড়া)
+          // 🌍 সম্পূর্ণ সাবস্ক্রিপশন-ফ্রি স্যাটেলাইট ও ওপেনস্ট্রিটম্যাপ ভিউ
           Positioned.fill(
-            child: GoogleMap(
-              initialCameraPosition: const CameraPosition(
-                target: _initialPosition,
-                zoom: 16.0,
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _initialPosition,
+                initialZoom: 17.5,
+                maxZoom: 20.0,
+                minZoom: 3.0,
+                onTap: _onMapTapped,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                ),
               ),
-              mapType: MapType.satellite,
-              myLocationButtonEnabled: false,
-              zoomControlsEnabled: false,
-              polygons: polygons,
-              polylines: polylines,
-              markers: markers,
-              onTap: _onMapTapped,
-              onMapCreated: (controller) => _mapController = controller,
+              children: [
+                TileLayer(
+                  urlTemplate: _isSatellite
+                      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'app.solectricity.shs',
+                  maxNativeZoom: 19,
+                ),
+                PolygonLayer(polygons: polygons),
+                PolylineLayer(polylines: polylines),
+                MarkerLayer(markers: markers),
+              ],
             ),
           ),
+
+          // 🎛️ ফ্লোটিং টুলস (স্যাটেলাইট/ম্যাপ টগল ও বর্তমান জিপিএস লোকেশন বাটন)
+          Positioned(
+            right: 14,
+            top: 70,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'map_view_toggle',
+                    backgroundColor: isDark
+                        ? AppColors.darkCardBg
+                        : Colors.white,
+                    foregroundColor: _isSatellite
+                        ? AppColors.solarGold
+                        : AppColors.energyGreen,
+                    tooltip: _isSatellite
+                        ? (_isBangla
+                              ? 'ম্যাপ ভিউ দেখুন'
+                              : 'Switch to Street Map')
+                        : (_isBangla
+                              ? 'স্যাটেলাইট ভিউ দেখুন'
+                              : 'Switch to Satellite'),
+                    onPressed: () =>
+                        setState(() => _isSatellite = !_isSatellite),
+                    child: Icon(
+                      _isSatellite
+                          ? Icons.map_rounded
+                          : Icons.satellite_alt_rounded,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'gps_location_btn',
+                    backgroundColor: isDark
+                        ? AppColors.darkCardBg
+                        : Colors.white,
+                    foregroundColor: AppColors.energyGreen,
+                    tooltip: _isBangla ? 'আমার অবস্থান' : 'My Location',
+                    onPressed: _isLocatingUser
+                        ? null
+                        : () => _goToCurrentLocation(silent: false),
+                    child: _isLocatingUser
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.energyGreen,
+                            ),
+                          )
+                        : const Icon(Icons.my_location_rounded),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           Positioned(
             left: 14,
-            right: 14,
+            right: 70,
             top: 12,
             child: SafeArea(
               child: _buildControlWrapper(

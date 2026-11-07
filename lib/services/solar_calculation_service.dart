@@ -281,3 +281,138 @@ class SolarCalculationService {
     return '50.0 mm²';
   }
 }
+
+class ModuleDimensions {
+  final double lengthM; // মিটার (দৈর্ঘ্য)
+  final double widthM; // মিটার (প্রস্থ)
+
+  const ModuleDimensions({required this.lengthM, required this.widthM});
+}
+
+extension SolarGeometryEngine on SolarCalculationService {
+  // ১. ওয়াট অনুযায়ী বাস্তব ডাইমেনশন ম্যাপিং
+  static ModuleDimensions getModuleDimensions(int watt) {
+    if (watt <= 150) return const ModuleDimensions(lengthM: 1.20, widthM: 0.67);
+    if (watt <= 250) return const ModuleDimensions(lengthM: 1.65, widthM: 0.99);
+    if (watt <= 350) return const ModuleDimensions(lengthM: 1.95, widthM: 0.99);
+    if (watt <= 450) return const ModuleDimensions(lengthM: 2.10, widthM: 1.04);
+    if (watt <= 550) return const ModuleDimensions(lengthM: 2.27, widthM: 1.13);
+    return const ModuleDimensions(lengthM: 2.38, widthM: 1.13); // 620W+
+  }
+
+  // ২. ২১ ডিসেম্বরের শীতকালীন ছায়া-মুক্ত ইন্টার-রো স্পেসিং (Pitch)
+  static double calculateRowPitch({
+    required double latitude,
+    required double tiltAngleDeg,
+    required double moduleLengthM,
+  }) {
+    final double absLat = latitude.abs();
+    // ২১ ডিসেম্বরে সৌর উচ্চতা কোণ (Solar Altitude Angle in degrees)
+    final double solarAltitudeDeg = (90.0 - absLat - 23.45).clamp(10.0, 75.0);
+
+    final double tiltRad = tiltAngleDeg * (math.pi / 180.0);
+    final double altRad = solarAltitudeDeg * (math.pi / 180.0);
+
+    // প্যানেলের আনুভূমিক বিস্তার + পেছনের ছায়ার দৈর্ঘ্য
+    final double panelHorizontalSpan = moduleLengthM * math.cos(tiltRad);
+    final double panelVerticalHeight = moduleLengthM * math.sin(tiltRad);
+    final double shadowLength = panelVerticalHeight / math.tan(altRad);
+
+    return panelHorizontalSpan + shadowLength;
+  }
+
+  // ৩. ছাদের বাউন্ডারিতে বাস্তব পূর্ণ প্যানেল ফিটিং
+  static Map<String, dynamic> calculateDiscreteLayout({
+    required double northSouthSpanM,
+    required double eastWestSpanM,
+    required double netUsableAreaSqM,
+    required double latitude,
+    required int moduleWatt,
+  }) {
+    final dims = getModuleDimensions(moduleWatt);
+    final tilt = SolarCalculationService.calculateOptimalTilt(latitude);
+    final pitch = calculateRowPitch(
+      latitude: latitude,
+      tiltAngleDeg: tilt,
+      moduleLengthM: dims.lengthM,
+    );
+
+    // উত্তর-দক্ষিণে সারি এবং পূর্ব-পশ্চিমে কলাম সংখ্যা
+    int possibleRows = (northSouthSpanM / pitch).floor();
+    int possibleCols = (eastWestSpanM / dims.widthM).floor();
+
+    if (possibleRows < 1 && northSouthSpanM >= dims.lengthM) possibleRows = 1;
+    if (possibleCols < 1 && eastWestSpanM >= dims.widthM) possibleCols = 1;
+
+    int totalDiscretePanels = possibleRows * possibleCols;
+
+    // মোট ক্ষেত্রফলের বাইরে যাতে প্যানেল সংখ্যা চলে না যায়
+    final int maxPanelsByArea = (netUsableAreaSqM / (pitch * dims.widthM))
+        .floor();
+    if (totalDiscretePanels > maxPanelsByArea && maxPanelsByArea > 0) {
+      totalDiscretePanels = maxPanelsByArea;
+    }
+
+    final double actualKwp = (totalDiscretePanels * moduleWatt) / 1000.0;
+
+    return {
+      'rows': possibleRows,
+      'cols': possibleCols,
+      'pitchM': pitch,
+      'totalPanels': totalDiscretePanels,
+      'actualKwp': actualKwp,
+      'tiltDeg': tilt,
+    };
+  }
+
+  // ৪. স্থান ও বাউন্ডারির ওপর ভিত্তি করে সর্বোত্তম প্যানেল ওয়াট স্বয়ংক্রিয়ভাবে নির্ধারণ
+  static int findOptimalModuleWatt({
+    required double northSouthSpanM,
+    required double eastWestSpanM,
+    required double netUsableAreaSqM,
+    required double latitude,
+  }) {
+    const candidateWatts = [620, 550, 450, 400, 330, 250, 150];
+    int bestWatt = 550; // ডিফল্ট
+    double maxKwp = 0.0;
+    int maxPanels = 0;
+
+    for (final watt in candidateWatts) {
+      final res = calculateDiscreteLayout(
+        northSouthSpanM: northSouthSpanM,
+        eastWestSpanM: eastWestSpanM,
+        netUsableAreaSqM: netUsableAreaSqM,
+        latitude: latitude,
+        moduleWatt: watt,
+      );
+
+      final int panels = res['totalPanels'] as int;
+      final double kwp = res['actualKwp'] as double;
+
+      // সর্বাধিক কিলোওয়াট পিক (kWp) উৎপাদনকারী প্যানেল বেছে নেওয়া
+      if (kwp > maxKwp) {
+        maxKwp = kwp;
+        maxPanels = panels;
+        bestWatt = watt;
+      }
+    }
+
+    // যদি কোনো বড় মডিউলেই জায়গা না ধরে, তবে অন্তত যাতে প্যানেল সংখ্যা > ০ হয় এমন ছোট প্যানেল নির্বাচন
+    if (maxPanels == 0) {
+      for (final watt in candidateWatts.reversed) {
+        final res = calculateDiscreteLayout(
+          northSouthSpanM: northSouthSpanM,
+          eastWestSpanM: eastWestSpanM,
+          netUsableAreaSqM: netUsableAreaSqM,
+          latitude: latitude,
+          moduleWatt: watt,
+        );
+        if ((res['totalPanels'] as int) > 0) {
+          return watt;
+        }
+      }
+    }
+
+    return bestWatt;
+  }
+}
