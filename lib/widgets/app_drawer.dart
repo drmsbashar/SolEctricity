@@ -64,7 +64,9 @@ class AppDrawer extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          isBangla ? 'ঘরের মাঝে রবির কিরণ' : 'Plug to the Sun',
+                          isBangla
+                              ? 'ঘরের মাঝে রবির কিরণ'
+                              : 'Plug into the Sun',
                           style: const TextStyle(
                             fontSize: 13,
                             color: Colors.white70,

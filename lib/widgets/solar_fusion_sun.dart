@@ -22,7 +22,7 @@ class _SolarFusionSunState extends State<SolarFusionSun>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 22),
+      duration: const Duration(seconds: 32),
     )..repeat();
   }
 
@@ -37,11 +37,14 @@ class _SolarFusionSunState extends State<SolarFusionSun>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
+        // মিনি মোডেও যাতে সুন্দর একটি মৃদু স্পন্দন (পালস) হয়
         final pulse =
-            1.0 + 0.05 * math.sin(_controller.value * 2 * math.pi * 4);
+            1.0 +
+            (widget.isMini ? 0.06 : 0.08) *
+                math.sin(_controller.value * 2 * math.pi * 4);
 
         return Transform.scale(
-          scale: widget.isMini ? 1.0 : pulse,
+          scale: pulse, // 👈 এখানে সরাসরি pulse বসিয়ে দিন
           child: SizedBox(
             width: widget.size,
             height: widget.size,

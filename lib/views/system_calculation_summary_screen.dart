@@ -1,9 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
 import '../services/pdf_report_service.dart';
+import '../services/solar_calculation_service.dart';
+import '../widgets/app_bar_title.dart';
 
 class SystemCalculationSummaryScreen extends StatefulWidget {
   final SolarCalculationResult result;
@@ -157,6 +161,47 @@ class _SystemCalculationSummaryScreenState
     );
   }
 
+  // 📐 বাস্তবসম্মত ছাদ ও জমির ক্ষেত্রফল নির্ণয় অ্যালগরিদম
+  Map<String, double> _calculateRealisticRoofArea(
+    SolarCalculationResult result,
+    SystemSizingParams params,
+  ) {
+    const double assumedLatitude = 23.8103; // বাংলাদেশের রেফারেন্স অক্ষাংশ
+    final dims = SolarGeometryEngine.getModuleDimensions(
+      params.panelPmax.toInt(),
+    );
+    final tilt = SolarCalculationService.calculateOptimalTilt(assumedLatitude);
+    final tiltRad = tilt * (math.pi / 180.0);
+    final double singlePanelNS = dims.lengthM * math.cos(tiltRad);
+
+    final double pitch = SolarGeometryEngine.calculateRowPitch(
+      latitude: assumedLatitude,
+      tiltAngleDeg: tilt,
+      moduleLengthM: dims.lengthM,
+    );
+
+    final int rows = result.panelsParallel;
+    final int cols = result.panelsSeries;
+
+    double netAreaSqM = 0.0;
+    if (rows <= 1) {
+      netAreaSqM =
+          (singlePanelNS * dims.widthM) * math.max(1, result.totalPanels);
+    } else {
+      final double totalLengthNS = (singlePanelNS) + ((rows - 1) * pitch);
+      final double totalWidthEW = cols * dims.widthM;
+      netAreaSqM = totalLengthNS * totalWidthEW;
+    }
+
+    if (netAreaSqM <= 0) {
+      netAreaSqM =
+          (result.totalArrayWatt / 1000.0) * 7.5; // ফলব্যাক স্ট্যান্ডার্ড
+    }
+
+    final double netAreaSqFt = netAreaSqM * 10.7639;
+    return {'sqM': netAreaSqM, 'sqFt': netAreaSqFt};
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -165,18 +210,20 @@ class _SystemCalculationSummaryScreenState
     final isGridTied = params.systemType == SolarSystemType.gridTied;
     final isHybrid = params.systemType == SolarSystemType.hybrid;
 
-    // 📐 স্থান ও আনুমানিক বাজেটের হিসাব
-    final double totalWatts = result.totalArrayWatt;
-    final double estimatedRoofSqFt = (totalWatts / 1000.0) * 88.0;
-    final double estimatedRoofSqM = estimatedRoofSqFt / 10.7639;
+    // 📐 ডায়নামিক জ্যামিতিক স্থান ও আনুমানিক বাজেটের হিসাব
+    final areaMap = _calculateRealisticRoofArea(result, params);
+    final double estimatedRoofSqFt = areaMap['sqFt']!;
+    final double estimatedRoofSqM = areaMap['sqM']!;
     final double effectiveRate = _customRatePerWatt ?? 70.0;
-    final double estimatedTotalBudget = totalWatts * effectiveRate;
+    final double estimatedTotalBudget = result.totalArrayWatt * effectiveRate;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isBangla ? 'সিস্টেম ক্যালকুলেশন সামারি' : 'System Sizing Summary',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: TwoLineAppBarTitle(
+          title: _isBangla ? 'প্রয়োজনীয় সিস্টেম' : 'Sizing Summary',
+          subtitle: _isBangla
+              ? 'চূড়ান্ত কারিগরি স্পেসিফিকেশন'
+              : 'Final System Specifications',
         ),
         actions: [
           IconButton(
@@ -251,11 +298,8 @@ class _SystemCalculationSummaryScreenState
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Column(
                   children: [
-                    // ১. সিগনেচার এনার্জি ডিমান্ড হেডব্যান্ড
                     _buildTactileDemandHeaderCard(result, params, isDark),
                     const SizedBox(height: 16),
-
-                    // ২. সম্ভাব্য স্থান ও আনুমানিক বাজেট কার্ড (পরিবর্তনশীল বাজারদরসহ)
                     _buildSpaceAndBudgetCard(
                       roofSqFt: estimatedRoofSqFt,
                       roofSqM: estimatedRoofSqM,
@@ -264,33 +308,21 @@ class _SystemCalculationSummaryScreenState
                       isDark: isDark,
                     ),
                     const SizedBox(height: 16),
-
-                    // ৩. সোলার পিভি অ্যারে কার্ড
                     _buildPvArrayCard(result, params, isDark),
                     const SizedBox(height: 16),
-
-                    // ৪. ব্যাটারি ব্যাংক কার্ড (অন-গ্রিড হলে বাদ)
                     if (!isGridTied) ...[
                       _buildBatteryBankCard(result, params, isDark),
                       const SizedBox(height: 16),
                     ],
-
-                    // ৫. পাওয়ার ইলেকট্রনিক্স কার্ড
                     _buildPowerElectronicsCard(result, params, isDark),
                     const SizedBox(height: 16),
-
-                    // ৬. সুরক্ষাব্যবস্থা ও তারের সাইজ কার্ড
                     _buildProtectionAndCablesCard(result, params, isDark),
                     const SizedBox(height: 16),
-
-                    // ৭. সিস্টেম রিক্যাপ কার্ড
                     _buildSystemSpecsRecapCard(result, params, isDark),
                   ],
                 ),
               ),
             ),
-
-            // ৩ডি ইঞ্জিনিয়ারিং কন্ট্রোল ডক (নিচে ওয়্যারিং ডায়াগ্রাম অ্যাকশন বাটন)
             Container(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               decoration: BoxDecoration(
@@ -609,7 +641,6 @@ class _SystemCalculationSummaryScreenState
           const SizedBox(height: 14),
           Row(
             children: [
-              // প্রয়োজনীয় স্থান
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -672,7 +703,6 @@ class _SystemCalculationSummaryScreenState
                 ),
               ),
               const SizedBox(width: 10),
-              // আনুমানিক বাজেট (Tap to edit)
               Expanded(
                 child: InkWell(
                   onTap: () => _openRateEditorDialog(isDark),
@@ -783,7 +813,7 @@ class _SystemCalculationSummaryScreenState
         const SizedBox(height: 8),
         _buildSimpleConnectionBadge(
           text: _isBangla
-              ? 'সংযোগ বিন্যাস: প্রতি সারিতে ${result.panelsSeries}টি করে মোট ${result.panelsParallel}টি সারি'
+              ? 'সংযোগ বিন্যাস: প্রতি সারিতে ${result.panelsSeries}টি করে মোট ${result.panelsParallel}টি স্ট্রিং'
               : 'Wiring: ${result.panelsSeries} in Series × ${result.panelsParallel} Strings Parallel',
           isDark: isDark,
         ),
@@ -1085,7 +1115,7 @@ class _SystemCalculationSummaryScreenState
                           ),
                           child: Text(
                             isGridTied
-                                ? 'Net Metering'
+                                ? 'DC/AC ≈ 1.15'
                                 : (isHybrid
                                       ? 'Built-in MPPT'
                                       : 'Pure Sine Wave'),

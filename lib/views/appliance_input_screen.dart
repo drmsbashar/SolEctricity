@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../models/appliance_item.dart';
 import '../models/appliance_presets.dart';
+import '../widgets/app_bar_title.dart';
 
 class ApplianceInputScreen extends StatefulWidget {
   final CategoryConfig category;
@@ -98,11 +99,11 @@ class _ApplianceInputScreenState extends State<ApplianceInputScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                widget.isBangla ? '$title ইনপুট' : '$title Input',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              child: TwoLineAppBarTitle(
+                title: title,
+                subtitle: widget.isBangla
+                    ? 'উপকরণ ও সময় ইনপুট'
+                    : 'Appliance & Usage Input',
               ),
             ),
           ],

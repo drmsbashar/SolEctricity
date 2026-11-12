@@ -7,6 +7,7 @@ import '../widgets/solar_ui_components.dart';
 import 'appliance_input_screen.dart';
 import 'load_summary_screen.dart';
 import 'system_parameters_screen.dart';
+import '../widgets/app_bar_title.dart';
 
 class LoadSelectionScreen extends StatefulWidget {
   final bool isBangla;
@@ -70,9 +71,11 @@ class _LoadSelectionScreenState extends State<LoadSelectionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isBangla ? 'উপকরণ নির্বাচন' : 'Load Selection',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: TwoLineAppBarTitle(
+          title: _isBangla ? 'উপকরণ নির্বাচন' : 'Load Selection',
+          subtitle: _isBangla
+              ? 'বাসা বা অফিসের লোড তালিকা'
+              : 'Select Household Appliances',
         ),
         actions: [
           Container(

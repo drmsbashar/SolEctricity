@@ -10,6 +10,7 @@ import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
 import '../services/pdf_report_service.dart';
 import 'widgets/wiring_painters.dart';
+import '../widgets/app_bar_title.dart';
 
 class SystemDiagramScreen extends StatefulWidget {
   final SolarCalculationResult result;
@@ -97,6 +98,8 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
     setState(() => _isExporting = true);
 
     try {
+      // ১. প্রিন্ট ও PDF-এর জন্য সুপার শার্প হাই-রেজোলিউশন ক্যানভাস তৈরি (3.0x Scale)
+      const double exportScale = 3.0;
       final recorder = ui.PictureRecorder();
       final printCanvas = Canvas(
         recorder,
@@ -108,15 +111,16 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         params: widget.params,
         isBangla: _isBangla,
         isDark: false,
-        isForPrint: true,
+        isForPrint: true, // সাদা ব্যাকগ্রাউন্ড, প্রতিটি ব্লকের ভেতর পূর্ণাঙ্গ বিবরণ ও স্থায়ী লিজেন্ডসহ
       );
 
       printPainter.paint(printCanvas, const Size(vWidth, vHeight));
 
       final picture = recorder.endRecording();
+      // ৩ গুণ রেজোলিউশন যাতে ব্লকের ভেতরের প্রতিটি ভোল্টেজ, কারেন্ট, ব্রেকার টেক্সট ক্রিস্টাল ক্লিয়ার আসে
       final img = await picture.toImage(
-        (vWidth * 2.5).toInt(),
-        (vHeight * 2.5).toInt(),
+        (vWidth * exportScale).toInt(),
+        (vHeight * exportScale).toInt(),
       );
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       final diagramBytes = byteData?.buffer.asUint8List();
@@ -210,8 +214,13 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         ? 'মোট ${result.totalPanels}টি প্যানেল ($pvsটি সিরিজে × $pvpটি প্যারালালে)'
         : 'Total ${result.totalPanels} Panels ($pvs in Series × $pvp in Parallel)';
 
-    final double canvasWidth = math.max(680.0, (pvs * 130.0) + 215.0);
-    final double canvasHeight = math.max(380.0, 120.0 + (pvp * 185.0));
+    final double scale = pvs <= 3 ? 1.0 : (pvs <= 6 ? 0.82 : 0.68);
+    final double gridWidth = ((pvs * 95.0) + ((pvs - 1) * 35.0)) * scale;
+    final double canvasWidth = math.max(650.0, gridWidth + 260.0);
+    final double canvasHeight = math.max(
+      380.0,
+      110.0 + (pvp * (180.0 * scale)),
+    );
 
     _showDetailModal(
       title: _isBangla
@@ -255,47 +264,61 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
+          // 🌟 স্ক্রিন সাইজ অনুযায়ী স্বয়ংক্রিয় ফিট ও ইন্টারেক্টিভ জুম
           Expanded(
-            child: InteractiveViewer(
-              transformationController: modalController,
-              constrained: false,
-              boundaryMargin: const EdgeInsets.all(50),
-              minScale: 0.3,
-              maxScale: 3.0,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Container(
-                  width: canvasWidth,
-                  height: canvasHeight,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF090E17) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isDark
-                          ? const Color(0xFF334155)
-                          : const Color(0xFFCBD5E1),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: isDark ? 0.5 : 0.08,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return InteractiveViewer(
+                  transformationController: modalController,
+                  minScale: 0.5,
+                  maxScale: 3.5,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: FittedBox(
+                          fit: BoxFit.contain, // ডিফল্ট অবস্থায় ১০০% স্ক্রিনের ভেতরে ফিট থাকবে
+                          child: Container(
+                            width: canvasWidth,
+                            height: canvasHeight,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF090E17)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFF334155)
+                                    : const Color(0xFFCBD5E1),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(
+                                    alpha: isDark ? 0.5 : 0.08,
+                                  ),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: CustomPaint(
+                              size: Size(canvasWidth, canvasHeight),
+                              painter: CleanPanelVisualPainter(
+                                pvs: pvs,
+                                pvp: pvp,
+                                isBangla: _isBangla,
+                              ),
+                            ),
+                          ),
                         ),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
                       ),
-                    ],
-                  ),
-                  child: CustomPaint(
-                    size: Size(canvasWidth, canvasHeight),
-                    painter: CleanPanelVisualPainter(
-                      pvs: pvs,
-                      pvp: pvp,
-                      isBangla: _isBangla,
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
           _buildBottomGuideText(
@@ -318,8 +341,10 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
         ? 'মোট ${result.totalBatteries}টি ব্যাটারি ($bsটি সিরিজে × $bpটি প্যারালালে = ${widget.params.systemVoltage.toInt()}V)'
         : 'Total ${result.totalBatteries} Batteries ($bs in Series × $bp in Parallel = ${widget.params.systemVoltage.toInt()}V)';
 
-    final double canvasWidth = math.max(680.0, (bs * 140.0) + 215.0);
-    final double canvasHeight = math.max(380.0, 120.0 + (bp * 145.0));
+    final double scale = bs <= 2 ? 1.0 : (bs <= 4 ? 0.85 : 0.70);
+    final double gridWidth = ((bs * 105.0) + ((bs - 1) * 35.0)) * scale;
+    final double canvasWidth = math.max(650.0, gridWidth + 260.0);
+    final double canvasHeight = math.max(380.0, 110.0 + (bp * (140.0 * scale)));
 
     _showDetailModal(
       title: _isBangla
@@ -363,48 +388,62 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
               ],
             ),
           ),
+          // 🌟 স্ক্রিন সাইজ অনুযায়ী স্বয়ংক্রিয় ফিট ও ইন্টারেক্টিভ জুম
           Expanded(
-            child: InteractiveViewer(
-              transformationController: modalController,
-              constrained: false,
-              boundaryMargin: const EdgeInsets.all(50),
-              minScale: 0.3,
-              maxScale: 3.0,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Container(
-                  width: canvasWidth,
-                  height: canvasHeight,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF090E17) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isDark
-                          ? const Color(0xFF334155)
-                          : const Color(0xFFCBD5E1),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: isDark ? 0.5 : 0.08,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return InteractiveViewer(
+                  transformationController: modalController,
+                  minScale: 0.5,
+                  maxScale: 3.5,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: FittedBox(
+                          fit: BoxFit.contain, // ডিফল্ট অবস্থায় ১০০% স্ক্রিনের ভেতরে ফিট থাকবে
+                          child: Container(
+                            width: canvasWidth,
+                            height: canvasHeight,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF090E17)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFF334155)
+                                    : const Color(0xFFCBD5E1),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(
+                                    alpha: isDark ? 0.5 : 0.08,
+                                  ),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: CustomPaint(
+                              size: Size(canvasWidth, canvasHeight),
+                              painter: CleanBatteryVisualPainter(
+                                bs: bs,
+                                bp: bp,
+                                sysVolt: widget.params.systemVoltage.toInt(),
+                                isBangla: _isBangla,
+                              ),
+                            ),
+                          ),
                         ),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
                       ),
-                    ],
-                  ),
-                  child: CustomPaint(
-                    size: Size(canvasWidth, canvasHeight),
-                    painter: CleanBatteryVisualPainter(
-                      bs: bs,
-                      bp: bp,
-                      sysVolt: widget.params.systemVoltage.toInt(),
-                      isBangla: _isBangla,
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
           _buildBottomGuideText(
@@ -805,15 +844,16 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isBangla ? 'সিস্টেম ওয়্যারিং ডায়াগ্রাম' : 'System Wiring Diagram',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
+        titleSpacing:
+            8.0, // বামের আইকন ও টাইটেলের মাঝের ফাঁকা জায়গা অপ্টিমাইজ করা হলো
+        title: TwoLineAppBarTitle(
+          title: _isBangla ? 'সংযোগ চিত্র' : 'Wiring Diagram',
+          subtitle: _isBangla
+              ? 'ব্লক ও ক্যাবল কানেকশন গাইড'
+              : 'System Blueprint & Connections',
         ),
         actions: [
+          // ১. ল্যান্ডস্কেপ / পোর্ট্রেট রোটেশন বাটন (বাইরে থাকবে)
           IconButton(
             tooltip: _isLandscape ? 'পোর্ট্রেট মোড' : 'ল্যান্ডস্কেপ মোড',
             icon: Icon(
@@ -821,17 +861,12 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                   ? Icons.screen_lock_portrait_rounded
                   : Icons.screen_lock_landscape_rounded,
               color: Colors.amberAccent,
+              size: 22,
             ),
             onPressed: _toggleOrientation,
           ),
-          IconButton(
-            tooltip: _isBangla ? 'রিসেট ভিউ' : 'Reset View',
-            icon: const Icon(
-              Icons.center_focus_strong_rounded,
-              color: Colors.white70,
-            ),
-            onPressed: _resetZoom,
-          ),
+
+          // ২. পিডিএফ রিপোর্ট শেয়ার বাটন (বাইরে থাকবে)
           IconButton(
             tooltip: _isBangla
                 ? 'ডায়াগ্রামসহ রিপোর্ট শেয়ার'
@@ -845,44 +880,59 @@ class _SystemDiagramScreenState extends State<SystemDiagramScreen> {
                       strokeWidth: 2,
                     ),
                   )
-                : const Icon(Icons.share_rounded, color: Colors.white),
+                : const Icon(
+                    Icons.share_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
             onPressed: _isExporting ? null : _handlePdfExport,
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 1.0,
-              ),
-            ),
-            child: TextButton.icon(
-              onPressed: () => setState(() => _isBangla = !_isBangla),
-              icon: const Icon(
-                Icons.translate_rounded,
-                color: Colors.white,
-                size: 14,
-              ),
-              label: Text(
-                _isBangla ? 'ENG' : 'বাংলা',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11.5,
+
+          // ৩. বাকি ৩টি অপশন (Reset Zoom, Language, Home) একটি ৩-ডট মেনুতে একীভূত করা হলো
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            tooltip: _isBangla ? 'আরও অপশন' : 'More Options',
+            onSelected: (value) {
+              if (value == 'reset') {
+                _resetZoom();
+              } else if (value == 'lang') {
+                setState(() => _isBangla = !_isBangla);
+              } else if (value == 'home') {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'reset',
+                child: Row(
+                  children: [
+                    const Icon(Icons.center_focus_strong_rounded, size: 19),
+                    const SizedBox(width: 10),
+                    Text(_isBangla ? 'রিসেট ভিউ (Reset)' : 'Reset Zoom'),
+                  ],
                 ),
               ),
-            ),
-          ),
-          IconButton(
-            tooltip: _isBangla ? 'হোম / ড্যাশবোর্ড' : 'Dashboard / Home',
-            icon: const Icon(Icons.home_rounded, color: Colors.white),
-            onPressed: () {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
+              PopupMenuItem(
+                value: 'lang',
+                child: Row(
+                  children: [
+                    const Icon(Icons.translate_rounded, size: 19),
+                    const SizedBox(width: 10),
+                    Text(_isBangla ? 'Switch to English' : 'বাংলা ভাষা'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'home',
+                child: Row(
+                  children: [
+                    const Icon(Icons.home_rounded, size: 19),
+                    const SizedBox(width: 10),
+                    Text(_isBangla ? 'হোম / ড্যাশবোর্ড' : 'Home Dashboard'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

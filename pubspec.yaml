@@ -18,6 +18,7 @@ dependencies:
   shared_preferences: ^2.3.5
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+  google_fonts: ^6.2.1
 
   cupertino_icons: ^1.0.8
   flutter_svg: ^2.3.2
@@ -40,7 +41,7 @@ flutter:
     - assets/icons/
 
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: true
   ios: true
   image_path: "assets/icons/app_icon.png"
   min_sdk_android: 21

@@ -1,13 +1,43 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../constants/app_colors.dart';
 import '../models/system_sizing_params.dart';
 import '../services/solar_calculation_service.dart';
 import '../services/solar_radiation_service.dart';
-import '../widgets/theme_toggle_button.dart';
+import '../services/tariff_config_service.dart';
+import 'cost_based_solar_screen.dart';
+import '../widgets/app_bar_title.dart';
+
+class MaxDemandTextInputFormatter extends TextInputFormatter {
+  final double maxValue;
+
+  MaxDemandTextInputFormatter(this.maxValue);
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+    final double? enteredValue = double.tryParse(
+      newValue.text.replaceAll(',', ''),
+    );
+    if (enteredValue == null || enteredValue > maxValue) {
+      return oldValue;
+    }
+    return newValue;
+  }
+}
 
 class CapacityBasedSolarScreen extends StatefulWidget {
   final bool isBangla;
@@ -30,29 +60,198 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
   final TextEditingController _demandController = TextEditingController(
     text: '20',
   );
+  final FocusNode _demandFocusNode = FocusNode();
+
   SolarSystemType _selectedSystemType = SolarSystemType.gridTied;
+  BatteryChemistry _selectedBatteryChemistry = BatteryChemistry.tubular;
 
   double _selectedModuleEfficiency = 0.215;
   int _selectedModuleWatt = 550;
+  bool _userManuallyChangedWatt = false;
+
   int _backupHours = 4;
   double _dayLoadPercentage = 60.0;
 
   bool _isLoadingNasa = false;
+  bool _isExportingPdf = false;
   SolarRadiationResult? _climateData;
+  TariffConfig _tariffConfig = TariffConfig.defaultConfig();
 
   static const double _defaultLat = 23.8103;
   static const double _defaultLon = 90.4125;
+
+  static const double minDailyKwh = 1.0;
+  static const double maxDailyKwh = 200.0;
 
   @override
   void initState() {
     super.initState();
     _isBangla = widget.isBangla;
+    _autoSuggestPanelWatt(20.0);
+    _initTariffConfig();
     _fetchLocationClimateData();
+
+    _demandFocusNode.addListener(() {
+      if (!_demandFocusNode.hasFocus) {
+        _clampAndFormatInput();
+      }
+    });
+  }
+
+  Future<void> _initTariffConfig() async {
+    final config = await TariffConfigService.getActiveConfig();
+    if (mounted) {
+      setState(() {
+        _tariffConfig = config;
+      });
+    }
+  }
+
+  void _autoSuggestPanelWatt(double demandKwh) {
+    if (_userManuallyChangedWatt) return;
+    if (demandKwh <= 2.0) {
+      _selectedModuleWatt = 80;
+    } else if (demandKwh <= 6.0) {
+      _selectedModuleWatt = 200;
+    } else if (demandKwh <= 15.0) {
+      _selectedModuleWatt = 330;
+    } else {
+      _selectedModuleWatt = 550;
+    }
+  }
+
+  void _clampAndFormatInput() {
+    final double currentVal =
+        double.tryParse(_demandController.text.replaceAll(',', '')) ?? 0.0;
+    if (currentVal < minDailyKwh) {
+      setState(() {
+        _demandController.text = minDailyKwh.toStringAsFixed(0);
+        _autoSuggestPanelWatt(minDailyKwh);
+      });
+    } else if (currentVal > maxDailyKwh) {
+      setState(() {
+        _demandController.text = maxDailyKwh.toStringAsFixed(0);
+        _autoSuggestPanelWatt(maxDailyKwh);
+      });
+    }
+  }
+
+  double _getDefaultTurnkeyRate(SolarSystemType type) {
+    if (_isBangla) {
+      switch (type) {
+        case SolarSystemType.gridTied:
+          return _tariffConfig.costPerWatt > 0
+              ? _tariffConfig.costPerWatt
+              : 75.0;
+        case SolarSystemType.hybrid:
+          switch (_selectedBatteryChemistry) {
+            case BatteryChemistry.leadAcid:
+              return 95.0;
+            case BatteryChemistry.tubular:
+              return 105.0;
+            case BatteryChemistry.lithium:
+              return 135.0;
+          }
+        case SolarSystemType.offGrid:
+          switch (_selectedBatteryChemistry) {
+            case BatteryChemistry.leadAcid:
+              return 110.0;
+            case BatteryChemistry.tubular:
+              return 120.0;
+            case BatteryChemistry.lithium:
+              return 150.0;
+          }
+      }
+    } else {
+      switch (type) {
+        case SolarSystemType.gridTied:
+          return 0.65;
+        case SolarSystemType.hybrid:
+          switch (_selectedBatteryChemistry) {
+            case BatteryChemistry.leadAcid:
+              return 0.80;
+            case BatteryChemistry.tubular:
+              return 0.90;
+            case BatteryChemistry.lithium:
+              return 1.15;
+          }
+        case SolarSystemType.offGrid:
+          switch (_selectedBatteryChemistry) {
+            case BatteryChemistry.leadAcid:
+              return 0.95;
+            case BatteryChemistry.tubular:
+              return 1.05;
+            case BatteryChemistry.lithium:
+              return 1.30;
+          }
+      }
+    }
+  }
+
+  double _calculateRealisticPayback({
+    required double totalCost,
+    required double baseAnnualSavings,
+  }) {
+    if (baseAnnualSavings <= 0 || totalCost <= 0) return 0.0;
+
+    double cumulativeSavings = 0.0;
+    double currentYearSavings = baseAnnualSavings;
+
+    double batteryUnitRatio = 0.0;
+    if (_selectedSystemType != SolarSystemType.gridTied) {
+      switch (_selectedBatteryChemistry) {
+        case BatteryChemistry.leadAcid:
+          batteryUnitRatio = _selectedSystemType == SolarSystemType.hybrid
+              ? 0.20
+              : 0.24;
+          break;
+        case BatteryChemistry.tubular:
+          batteryUnitRatio = _selectedSystemType == SolarSystemType.hybrid
+              ? 0.24
+              : 0.28;
+          break;
+        case BatteryChemistry.lithium:
+          batteryUnitRatio = _selectedSystemType == SolarSystemType.hybrid
+              ? 0.38
+              : 0.42;
+          break;
+      }
+    }
+    final double batteryCost = totalCost * batteryUnitRatio;
+
+    for (int year = 1; year <= 25; year++) {
+      double yearNetSavings = currentYearSavings;
+
+      if (_selectedSystemType != SolarSystemType.gridTied) {
+        if (_selectedBatteryChemistry == BatteryChemistry.leadAcid &&
+            (year % 3 == 0)) {
+          yearNetSavings -= batteryCost * 0.70;
+        } else if (_selectedBatteryChemistry == BatteryChemistry.tubular &&
+            (year % 4 == 0)) {
+          yearNetSavings -= batteryCost * 0.70;
+        } else if (_selectedBatteryChemistry == BatteryChemistry.lithium &&
+            year == 12) {
+          yearNetSavings -= batteryCost * 0.60;
+        }
+      }
+
+      cumulativeSavings += yearNetSavings;
+      if (cumulativeSavings >= totalCost) {
+        final double prevSavings = cumulativeSavings - yearNetSavings;
+        final double needed = totalCost - prevSavings;
+        return (year - 1) +
+            (needed / (yearNetSavings > 0 ? yearNetSavings : 1.0));
+      }
+      currentYearSavings *= 0.995; // বার্ষিক ০.৫% অবক্ষয়
+    }
+
+    return 25.0;
   }
 
   @override
   void dispose() {
     _demandController.dispose();
+    _demandFocusNode.dispose();
     super.dispose();
   }
 
@@ -100,12 +299,359 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
     return {'strings': bestStrings, 'panelsPerString': bestPanelsPerString};
   }
 
+  // 🌟 ক্যানভাস-ভিত্তিক হাই-রেজোলিউশন বাংলা ইমেজ রেন্ডারার
+  Future<Uint8List> _renderCanvasReportImage({
+    required double dailyDemandKwh,
+    required double requiredCapacityKwp,
+    required int totalPanels,
+    required double netRoofAreaSqFt,
+    required double inverterKw,
+    required double batteryBankKwh,
+    required Map<String, int> stringConfig,
+    required double psh,
+    required double estimatedCost,
+    required double annualSavings,
+  }) async {
+    const double width = 1240.0;
+    const double height = 1754.0; // A4 Standard @ 150 DPI
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, width, height));
+
+    final bgPaint = Paint()..color = Colors.white;
+    canvas.drawRect(const Rect.fromLTWH(0, 0, width, height), bgPaint);
+
+    void drawText(
+      String text,
+      double x,
+      double y, {
+      double fontSize = 20,
+      FontWeight fontWeight = FontWeight.normal,
+      Color color = const Color(0xFF0F172A),
+      double maxWidth = 1100,
+    }) {
+      final textSpan = TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          fontFamily: _isBangla ? 'NotoSansBengali' : null,
+          fontFamilyFallback: const [
+            'NotoSansBengali',
+            'Kalpurush',
+            'SiyamRupali',
+            'SolaimanLipi',
+            'Roboto',
+          ],
+        ),
+      );
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: maxWidth);
+      textPainter.paint(canvas, Offset(x, y));
+    }
+
+    // শীর্ষ ব্যানার
+    final headerPaint = Paint()..color = const Color(0xFF0F766E);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(60, 60, width - 120, 110),
+        const Radius.circular(12),
+      ),
+      headerPaint,
+    );
+
+    drawText(
+      _isBangla
+          ? 'সূর্য বিদ্যুৎ — ক্ষমতাভিত্তিক সোলার সাইজিং রিপোর্ট'
+          : 'SolEctricity — Capacity Sizing Proposal',
+      90,
+      82,
+      fontSize: 26,
+      fontWeight: FontWeight.bold,
+      color: Colors.white,
+    );
+    drawText(
+      _isBangla
+          ? 'বাংলাদেশ বিজ্ঞান ও শিল্প গবেষণা পরিষদ (বিসিএসআইআর) | তারিখ: ${DateTime.now().toString().split(' ')[0]}'
+          : 'BCSIR Renewable Energy Research Lab | Date: ${DateTime.now().toString().split(' ')[0]}',
+      90,
+      126,
+      fontSize: 15,
+      color: const Color(0xFFCCFBF1),
+    );
+
+    // ৪টি প্রধান মেট্রিক কার্ড
+    final double cardY = 200;
+    final double cardW = (width - 120 - 45) / 4;
+    final metrics = [
+      {
+        't': _isBangla ? 'দৈনিক লক্ষ্যমাত্রা' : 'Daily Target',
+        'v': '${dailyDemandKwh.toStringAsFixed(1)} kWh',
+        'c': const Color(0xFF0284C7),
+      },
+      {
+        't': _isBangla ? 'প্রয়োজনীয় ক্ষমতা' : 'DC Capacity',
+        'v': '${requiredCapacityKwp.toStringAsFixed(2)} kWp',
+        'c': const Color(0xFF0D9488),
+      },
+      {
+        't': _isBangla ? 'প্যানেল সংখ্যা' : 'Solar Modules',
+        'v': _isBangla ? '$totalPanels টি' : '$totalPanels pcs',
+        'c': const Color(0xFFD97706),
+      },
+      {
+        't': _isBangla ? 'সম্ভাব্য বাজেট' : 'Estimated Cost',
+        'v': CurrencyFormatter.format(estimatedCost, _isBangla),
+        'c': const Color(0xFF4F46E5),
+      },
+    ];
+
+    for (int i = 0; i < metrics.length; i++) {
+      final x = 60 + i * (cardW + 15);
+      final cardRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, cardY, cardW, 100),
+        const Radius.circular(10),
+      );
+      canvas.drawRRect(cardRect, Paint()..color = const Color(0xFFF8FAFC));
+      canvas.drawRRect(
+        cardRect,
+        Paint()
+          ..color = const Color(0xFFE2E8F0)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+
+      drawText(
+        metrics[i]['t'] as String,
+        x + 14,
+        cardY + 16,
+        fontSize: 13.5,
+        color: const Color(0xFF64748B),
+      );
+      drawText(
+        metrics[i]['v'] as String,
+        x + 14,
+        cardY + 46,
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: metrics[i]['c'] as Color,
+      );
+    }
+
+    // টেবিল বিবরণ
+    double curY = 340;
+    drawText(
+      _isBangla
+          ? '১. প্রকৌশল সাইজিং ও সিস্টেম স্পেসিফিকেশন'
+          : '1. Solar PV Sizing & Space Specifications',
+      60,
+      curY,
+      fontSize: 22,
+      fontWeight: FontWeight.bold,
+      color: const Color(0xFF0F766E),
+    );
+    curY += 38;
+
+    final rows = [
+      [
+        _isBangla ? 'সিস্টেমের ধরন ও আর্কিটেকচার' : 'System Architecture',
+        _selectedSystemType == SolarSystemType.gridTied
+            ? (_isBangla ? 'অন-গ্রিড (নেট-মিটারিং)' : 'Grid-Tied (Net-Metered)')
+            : (_selectedSystemType == SolarSystemType.hybrid
+                  ? (_isBangla
+                        ? 'হাইব্রিড (সোলার + ব্যাটারি + গ্রিড)'
+                        : 'Hybrid (Solar + Battery + Grid)')
+                  : (_isBangla
+                        ? 'অফ-গ্রিড স্ট্যান্ডঅ্যালন'
+                        : 'Off-Grid Standalone')),
+      ],
+      [
+        _isBangla ? 'সোলার প্যানেলের একক ক্ষমতা' : 'PV Module Rating',
+        '$_selectedModuleWatt Watt (${(_selectedModuleEfficiency * 100).toStringAsFixed(1)}% Efficiency)',
+      ],
+      [
+        _isBangla ? 'স্ট্রিং ও প্যানেল বিন্যাস' : 'String Setup Configuration',
+        _isBangla
+            ? '${stringConfig['strings']} টি স্ট্রিং × ${stringConfig['panelsPerString']} টি প্যানেল'
+            : '${stringConfig['strings']} Strings × ${stringConfig['panelsPerString']} Panels',
+      ],
+      [
+        _isBangla ? 'প্রয়োজনীয় ছাদ / জমির জায়গা' : 'Required Shadow-Free Area',
+        '${netRoofAreaSqFt.toStringAsFixed(0)} sq.ft (≈ ${(netRoofAreaSqFt / 10.7639).toStringAsFixed(1)} m²)',
+      ],
+      [
+        _isBangla ? 'প্রস্তাবিত ইনভার্টার ক্ষমতা' : 'Recommended Inverter Size',
+        _selectedSystemType == SolarSystemType.gridTied
+            ? '${inverterKw.toStringAsFixed(1)} kW (DC/AC অনুপাত ≈ ১.১৫)'
+            : '≥ ${(inverterKw * 1000).toInt()} VA Pure Sine Wave',
+      ],
+      if (_selectedSystemType != SolarSystemType.gridTied) ...[
+        [
+          _isBangla ? 'ব্যাটারি স্টোরেজ ব্যাংক' : 'Battery Storage Capacity',
+          '${batteryBankKwh.toStringAsFixed(1)} kWh (48V ≈ ${(batteryBankKwh * 1000 / 48).toStringAsFixed(0)} Ah)',
+        ],
+        [
+          _isBangla ? 'জরুরি ব্যাকআপ স্থায়িত্ব' : 'Autonomy Backup Duration',
+          _isBangla
+              ? '$_backupHours ঘণ্টা (DoD: ৮০%)'
+              : '$_backupHours Hours (DoD: 80%)',
+        ],
+      ],
+      [
+        _isBangla ? 'বাৎসরিক বিদ্যুৎ সাশ্রয়' : 'Annual Electricity Savings',
+        CurrencyFormatter.format(annualSavings, _isBangla),
+      ],
+      [
+        _isBangla ? 'নাসা ক্লাইমেট ডেটা (PSH)' : 'NASA Climate Baseline (PSH)',
+        '${psh.toStringAsFixed(2)} hrs/day',
+      ],
+    ];
+
+    for (var r in rows) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(60, curY, width - 120, 48),
+          const Radius.circular(6),
+        ),
+        Paint()
+          ..color = (rows.indexOf(r) % 2 == 0)
+              ? const Color(0xFFF1F5F9)
+              : Colors.white,
+      );
+      drawText(
+        r[0],
+        76,
+        curY + 13,
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF334155),
+      );
+      drawText(
+        r[1],
+        480,
+        curY + 13,
+        fontSize: 15,
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFF0F172A),
+      );
+      curY += 52;
+    }
+
+    // ফুটনোট বক্স
+    curY += 20;
+    final noteRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(60, curY, width - 120, 110),
+      const Radius.circular(10),
+    );
+    canvas.drawRRect(noteRect, Paint()..color = const Color(0xFFECFDF5));
+    canvas.drawRRect(
+      noteRect,
+      Paint()
+        ..color = const Color(0xFFA7F3D0)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+
+    drawText(
+      _isBangla
+          ? 'পরিবেশগত ও প্রকৌশল নোট:'
+          : 'Engineering & Environmental Note:',
+      80,
+      curY + 18,
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: const Color(0xFF065F46),
+    );
+    drawText(
+      _isBangla
+          ? 'এই সিস্টেমে বাৎসরিক ${(dailyDemandKwh * 365 * 0.62).toStringAsFixed(0)} কেজি কার্বন নির্গমন হ্রাস পাবে যা প্রায় ${((dailyDemandKwh * 365 * 0.62) / 20).round()} টি গাছ লাগানোর সমতুল্য। শীতকালীন ছায়া কোণ ও তাপমাত্রা ডিরেটিং ফ্যাক্টর বিবেচনায় নিয়ে নেট এরিয়া প্রাক্কলন করা হয়েছে।'
+          : 'Estimated annual carbon offset is ${(dailyDemandKwh * 365 * 0.62).toStringAsFixed(0)} kg CO2. All calculations account for winter shadow pitch and solar cell thermal derating.',
+      80,
+      curY + 48,
+      fontSize: 13.5,
+      color: const Color(0xFF047857),
+      maxWidth: 1040,
+    );
+
+    // ফুটার
+    drawText(
+      _isBangla
+          ? 'SolEctricity — নবায়নযোগ্য শক্তি প্রকৌশল গবেষণা সফটওয়্যার | বিসিএসআইআর'
+          : 'SolEctricity — Renewable Energy Engineering Research Software | BCSIR',
+      60,
+      height - 80,
+      fontSize: 13,
+      color: const Color(0xFF94A3B8),
+    );
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(width.toInt(), height.toInt());
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  // 📄 পৃথক ক্যানভাস-ভিত্তিক PDF ফাইল জেনারেট ও শেয়ার
+  Future<void> _generateDedicatedPdf({
+    required double dailyDemandKwh,
+    required double requiredCapacityKwp,
+    required int totalPanels,
+    required double netRoofAreaSqFt,
+    required double inverterKw,
+    required double batteryBankKwh,
+    required Map<String, int> stringConfig,
+    required double psh,
+    required double estimatedCost,
+    required double annualSavings,
+  }) async {
+    setState(() => _isExportingPdf = true);
+
+    try {
+      final imgBytes = await _renderCanvasReportImage(
+        dailyDemandKwh: dailyDemandKwh,
+        requiredCapacityKwp: requiredCapacityKwp,
+        totalPanels: totalPanels,
+        netRoofAreaSqFt: netRoofAreaSqFt,
+        inverterKw: inverterKw,
+        batteryBankKwh: batteryBankKwh,
+        stringConfig: stringConfig,
+        psh: psh,
+        estimatedCost: estimatedCost,
+        annualSavings: annualSavings,
+      );
+
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.zero,
+          build: (context) => pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Image(pw.MemoryImage(imgBytes), fit: pw.BoxFit.fill),
+          ),
+        ),
+      );
+
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename:
+            'SolEctricity_Capacity_Report_${_isBangla ? "BN" : "EN"}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isExportingPdf = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final double dailyDemandKwh =
+    final double rawDemand =
         double.tryParse(_demandController.text.replaceAll(',', '')) ?? 0.0;
+    final double dailyDemandKwh = rawDemand.clamp(minDailyKwh, maxDailyKwh);
 
     final double psh =
         _climateData?.peakSunHours ?? SolarRadiationService.defaultPsh;
@@ -114,9 +660,30 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
       ambTemp,
     );
 
-    final double basePR = _selectedSystemType == SolarSystemType.gridTied
-        ? 0.80
-        : 0.72;
+    // ১. ব্যাটারির ধরন অনুযায়ী Performance Ratio (PR) ও DoD নির্ধারণ
+    double basePR = 0.80;
+    double batteryDod = 0.80;
+    double batteryEff = 0.85;
+
+    if (_selectedSystemType != SolarSystemType.gridTied) {
+      switch (_selectedBatteryChemistry) {
+        case BatteryChemistry.leadAcid:
+          basePR = 0.70;
+          batteryDod = 0.50; // লেড-এসিডের নিরাপদ DoD ৫০%
+          batteryEff = 0.80;
+          break;
+        case BatteryChemistry.tubular:
+          basePR = 0.74;
+          batteryDod = 0.75; // টিউবুলারের DoD ৭৫%
+          batteryEff = 0.85;
+          break;
+        case BatteryChemistry.lithium:
+          basePR = 0.80;
+          batteryDod = 0.85; // লিথিয়ামের DoD ৮৫%
+          batteryEff = 0.95;
+          break;
+      }
+    }
     final double effectivePR = basePR * tempDerate;
 
     final double requiredCapacityKwp = (psh > 0 && effectivePR > 0)
@@ -141,21 +708,66 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
     final double batteryBankKwh =
         (_selectedSystemType != SolarSystemType.gridTied && dailyDemandKwh > 0)
         ? ((nightEnergyKwh * (_backupHours / 12.0).clamp(0.2, 1.0)) /
-              (0.80 * 0.85))
+              (batteryDod * batteryEff))
         : 0.0;
 
-    final double inverterKw = requiredCapacityKwp > 0
-        ? (requiredCapacityKwp / 1.15).clamp(1.0, 500.0)
-        : 0.0;
+    // 🌟 অন-গ্রিড আর্কিটেকচারে ডিসি/এসি অনুপাত ১.১৫ সিঙ্ক
+    final double inverterKw = _selectedSystemType == SolarSystemType.gridTied
+        ? (requiredCapacityKwp > 0 ? (requiredCapacityKwp / 1.15) : 0.0)
+        : (requiredCapacityKwp > 0 ? (requiredCapacityKwp * 1.0) : 0.0);
+
+    final double unitRate = _getDefaultTurnkeyRate(_selectedSystemType);
+    final double estimatedCost = (requiredCapacityKwp * 1000.0) * unitRate;
+    final double annualGenKwh = dailyDemandKwh * 365.0;
+
+    // 🌟 রিমোট সিঙ্কড ট্যারিফ ও অবক্ষয় সমন্বিত বাস্তবসম্মত পে-ব্যাক
+    final double tariffRate = _isBangla
+        ? (_tariffConfig.residential > 0 ? _tariffConfig.residential : 8.50)
+        : 0.12;
+    final double annualSavings = annualGenKwh * tariffRate;
+    final double paybackYears = _calculateRealisticPayback(
+      totalCost: estimatedCost,
+      baseAnnualSavings: annualSavings,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isBangla
-              ? 'চাহিদাভিত্তিক সোলার সাইজিং'
-              : 'Demand-Based Solar Sizing',
+        title: TwoLineAppBarTitle(
+          title: _isBangla ? 'চাহিদাভিত্তিক সাইজিং' : 'Demand Sizing',
+          subtitle: _isBangla
+              ? 'দৈনিক বিদ্যুৎ চাহিদা অনুযায়ী'
+              : 'Based on Daily Energy Target',
         ),
         actions: [
+          IconButton(
+            tooltip: _isBangla
+                ? 'PDF রিপোর্ট ডাউনলোড/শেয়ার'
+                : 'Share PDF Report',
+            icon: _isExportingPdf
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.share_rounded, color: Colors.white),
+            onPressed: _isExportingPdf
+                ? null
+                : () => _generateDedicatedPdf(
+                    dailyDemandKwh: dailyDemandKwh,
+                    requiredCapacityKwp: requiredCapacityKwp,
+                    totalPanels: totalPanels,
+                    netRoofAreaSqFt: netRoofAreaSqFt,
+                    inverterKw: inverterKw,
+                    batteryBankKwh: batteryBankKwh,
+                    stringConfig: stringConfig,
+                    psh: psh,
+                    estimatedCost: estimatedCost,
+                    annualSavings: annualSavings,
+                  ),
+          ),
           IconButton(
             tooltip: _isBangla ? 'প্রপোজাল সারাংশ' : 'Proposal Summary',
             icon: Icon(
@@ -195,6 +807,13 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
               ),
             ),
           ),
+          IconButton(
+            tooltip: _isBangla ? 'হোম / ড্যাশবোর্ড' : 'Home',
+            icon: const Icon(Icons.home_rounded, color: Colors.white),
+            onPressed: () {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          ),
         ],
       ),
       body: Container(
@@ -222,8 +841,8 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
               const SizedBox(height: 18),
               Text(
                 _isBangla
-                    ? 'প্রকৌশল সাইজিং ফলাফল'
-                    : 'Engineering Sizing Results',
+                    ? 'প্রকৌশল সাইজিং ও ব্যয় ফলাফল'
+                    : 'Engineering Sizing & Costing',
                 style: TextStyle(
                   color: isDark
                       ? AppColors.darkTextPrimary
@@ -239,8 +858,8 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
                     title: _isBangla ? 'সিস্টেম ক্ষমতা' : 'DC Capacity',
                     value: '${requiredCapacityKwp.toStringAsFixed(2)} kWp',
                     subtitle: _isBangla
-                        ? 'বাৎসরিক: ${(dailyDemandKwh * 365).toStringAsFixed(0)} kWh'
-                        : 'Annual: ${(dailyDemandKwh * 365).toStringAsFixed(0)} kWh',
+                        ? 'বাৎসরিক: ${annualGenKwh.toStringAsFixed(0)} kWh'
+                        : 'Annual: ${annualGenKwh.toStringAsFixed(0)} kWh',
                     icon: Icons.flash_on_rounded,
                     color: isDark
                         ? AppColors.accentCyan
@@ -276,10 +895,46 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
                     title: _isBangla
                         ? 'প্রস্তাবিত ইনভার্টার'
                         : 'Recommended Inverter',
-                    value: '${inverterKw.toStringAsFixed(1)} kW',
-                    subtitle: 'DC/AC Ratio ≈ 1.15',
+                    value: _selectedSystemType == SolarSystemType.gridTied
+                        ? '${inverterKw.toStringAsFixed(1)} kW'
+                        : '≥ ${(inverterKw * 1000).toInt()} VA',
+                    subtitle: _selectedSystemType == SolarSystemType.gridTied
+                        ? 'DC/AC Ratio ≈ 1.15'
+                        : 'Pure Sine Wave',
                     icon: Icons.developer_board_rounded,
                     color: isDark ? Colors.tealAccent : const Color(0xFF0D9488),
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _buildResultStatCard(
+                    title: _isBangla
+                        ? 'সম্ভাব্য সিস্টেম বাজেট'
+                        : 'Estimated Budget',
+                    value: CurrencyFormatter.format(estimatedCost, _isBangla),
+                    subtitle: _isBangla
+                        ? '(@ ৳ ${unitRate.toInt()} / Wp টার্নকি)'
+                        : '(@ \$ ${unitRate.toStringAsFixed(2)} / Wp Turnkey)',
+                    icon: Icons.payments_rounded,
+                    color: isDark
+                        ? AppColors.accentCyan
+                        : const Color(0xFF0284C7),
+                    isDark: isDark,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildResultStatCard(
+                    title: _isBangla ? 'বিনিয়োগ ফেরত' : 'Est. Payback',
+                    value: paybackYears > 0
+                        ? '${paybackYears.toStringAsFixed(1)} ${_isBangla ? "বছর" : "Years"}'
+                        : 'N/A',
+                    subtitle: _isBangla
+                        ? 'সাশ্রয়: ${CurrencyFormatter.format(annualSavings, _isBangla)}/বছর'
+                        : 'Savings: ${CurrencyFormatter.format(annualSavings, _isBangla)}/yr',
+                    icon: Icons.savings_rounded,
+                    color: AppColors.solarGold,
                     isDark: isDark,
                   ),
                 ],
@@ -706,11 +1361,8 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
 
   Widget _buildDemandInputCard(bool isDark) {
     final double currentVal =
-        double.tryParse(_demandController.text.replaceAll(',', '')) ?? 20.0;
-    final double sliderMax = math.max(
-      200.0,
-      ((currentVal / 50).ceil() * 50).toDouble(),
-    );
+        double.tryParse(_demandController.text.replaceAll(',', '')) ??
+        minDailyKwh;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -757,16 +1409,27 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _demandController,
+            focusNode: _demandFocusNode,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+              MaxDemandTextInputFormatter(maxDailyKwh),
             ],
             style: TextStyle(
               color: isDark ? Colors.white : AppColors.lightTextPrimary,
               fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
-            onChanged: (_) => setState(() {}),
+            onChanged: (val) {
+              final parsed = double.tryParse(val.replaceAll(',', '')) ?? 0.0;
+              setState(() {
+                _autoSuggestPanelWatt(parsed);
+              });
+            },
+            onEditingComplete: () {
+              _clampAndFormatInput();
+              FocusScope.of(context).unfocus();
+            },
             decoration: InputDecoration(
               filled: true,
               fillColor: isDark
@@ -782,6 +1445,11 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
                 color: isDark ? Colors.white54 : AppColors.lightTextSecondary,
                 fontSize: 13,
               ),
+              errorText: (currentVal > 0 && currentVal < minDailyKwh)
+                  ? (_isBangla
+                        ? 'চাহিদা সর্বনিম্ন ১ kWh হতে হবে'
+                        : 'Minimum demand is 1 kWh')
+                  : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -811,15 +1479,37 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
             ),
             child: Slider(
-              value: currentVal.clamp(1.0, sliderMax),
-              min: 1.0,
-              max: sliderMax,
+              value: currentVal.clamp(minDailyKwh, maxDailyKwh),
+              min: minDailyKwh,
+              max: maxDailyKwh,
               onChanged: (v) {
                 setState(() {
                   _demandController.text = v.toStringAsFixed(0);
+                  _autoSuggestPanelWatt(v);
                 });
               },
             ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _isBangla ? 'সর্বনিম্ন: ১ kWh/দিন' : 'Min: 1 kWh/day',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                ),
+              ),
+              Text(
+                _isBangla
+                    ? 'সর্বোচ্চ: ২০০ kWh/দিন (SHS সীমা)'
+                    : 'Max: 200 kWh/day (SHS Limit)',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.white38 : AppColors.lightTextSecondary,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -827,6 +1517,22 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
   }
 
   Widget _buildConfigurationCard(bool isDark) {
+    const candidateWatts = [
+      20,
+      50,
+      80,
+      100,
+      150,
+      200,
+      250,
+      330,
+      400,
+      450,
+      550,
+      650,
+      700,
+    ];
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -954,14 +1660,27 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _isBangla ? 'মডিউল ক্ষমতা' : 'Rating',
-                      style: TextStyle(
-                        color: isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.lightTextSecondary,
-                        fontSize: 11,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _isBangla ? 'মডিউল ক্ষমতা' : 'Rating',
+                          style: TextStyle(
+                            color: isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          '($_selectedModuleWatt W)',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.solarGold,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -977,34 +1696,37 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
                               : AppColors.lightBorder,
                         ),
                       ),
-                      child: DropdownButton<int>(
-                        value: _selectedModuleWatt,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        dropdownColor: isDark
-                            ? AppColors.darkInputBg
-                            : AppColors.lightCardBg,
-                        style: TextStyle(
-                          color: isDark
-                              ? AppColors.accentCyan
-                              : const Color(0xFF0284C7),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.bold,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: candidateWatts.contains(_selectedModuleWatt)
+                              ? _selectedModuleWatt
+                              : candidateWatts.first,
+                          isExpanded: true,
+                          dropdownColor: isDark
+                              ? AppColors.darkInputBg
+                              : AppColors.lightCardBg,
+                          style: TextStyle(
+                            color: isDark
+                                ? AppColors.accentCyan
+                                : const Color(0xFF0284C7),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          items: candidateWatts.map((w) {
+                            return DropdownMenuItem<int>(
+                              value: w,
+                              child: Text('$w Watt'),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _selectedModuleWatt = val;
+                                _userManuallyChangedWatt = true;
+                              });
+                            }
+                          },
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 150, child: Text('150 W')),
-                          DropdownMenuItem(value: 250, child: Text('250 W')),
-                          DropdownMenuItem(value: 330, child: Text('330 W')),
-                          DropdownMenuItem(value: 400, child: Text('400 W')),
-                          DropdownMenuItem(value: 450, child: Text('450 W')),
-                          DropdownMenuItem(value: 550, child: Text('550 W')),
-                          DropdownMenuItem(value: 620, child: Text('620 W')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedModuleWatt = val);
-                          }
-                        },
                       ),
                     ),
                   ],
@@ -1013,6 +1735,42 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
             ],
           ),
           if (_selectedSystemType != SolarSystemType.gridTied) ...[
+            const SizedBox(height: 14),
+            Text(
+              _isBangla ? 'ব্যাটারির ধরন (Technology):' : 'Battery Technology:',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildBatteryChemistryChip(
+                  BatteryChemistry.leadAcid,
+                  _isBangla ? 'লেড-এসিড' : 'Lead-Acid',
+                  _isBangla ? 'DoD ৫০%' : '50% DoD',
+                  isDark,
+                ),
+                const SizedBox(width: 6),
+                _buildBatteryChemistryChip(
+                  BatteryChemistry.tubular,
+                  _isBangla ? 'টিউবুলার' : 'Tubular',
+                  _isBangla ? 'DoD ৭৫%' : '75% DoD',
+                  isDark,
+                ),
+                const SizedBox(width: 6),
+                _buildBatteryChemistryChip(
+                  BatteryChemistry.lithium,
+                  _isBangla ? 'লিথিয়াম LiFePO₄' : 'Lithium',
+                  _isBangla ? 'DoD ৮৫%' : '85% DoD',
+                  isDark,
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1053,6 +1811,64 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildBatteryChemistryChip(
+    BatteryChemistry chem,
+    String title,
+    String subtitle,
+    bool isDark,
+  ) {
+    final bool isSelected = _selectedBatteryChemistry == chem;
+    final activeColor = isDark ? AppColors.accentCyan : AppColors.energyGreen;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _selectedBatteryChemistry = chem),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? activeColor.withValues(alpha: 0.16)
+                : (isDark ? AppColors.darkInputBg : AppColors.lightInputBg),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? activeColor
+                  : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+              width: isSelected ? 1.4 : 1.0,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected
+                      ? (isDark ? Colors.white : activeColor)
+                      : (isDark ? Colors.white70 : AppColors.lightTextPrimary),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: isDark ? Colors.white38 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1222,7 +2038,9 @@ class _CapacityBasedSolarScreenState extends State<CapacityBasedSolarScreen> {
               ),
               _buildSummaryRow(
                 _isBangla ? 'প্রস্তাবিত ইনভার্টার' : 'Inverter Capacity',
-                '${inverterKw.toStringAsFixed(1)} kW',
+                _selectedSystemType == SolarSystemType.gridTied
+                    ? '${inverterKw.toStringAsFixed(1)} kW (Grid-Tied)'
+                    : '≥ ${(inverterKw * 1000).toInt()} VA',
                 isDark: isDark,
               ),
               _buildSummaryRow(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/appliance_item.dart';
+import '../widgets/app_bar_title.dart';
 
 class LoadSummaryScreen extends StatefulWidget {
   final List<ApplianceItem> items;
@@ -34,6 +35,167 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     });
   }
 
+  void _showEditItemDialog(ApplianceItem item) {
+    final wattController = TextEditingController(
+      text: item.watt.toStringAsFixed(
+        item.watt.truncateToDouble() == item.watt ? 0 : 1,
+      ),
+    );
+    final qtyController = TextEditingController(text: item.quantity.toString());
+    final hoursController = TextEditingController(
+      text: item.hoursPerDay.toStringAsFixed(
+        item.hoursPerDay.truncateToDouble() == item.hoursPerDay ? 0 : 1,
+      ),
+    );
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.skyBlue.withValues(alpha: 0.2)
+                    : const Color(0xFFE0F2FE),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.edit_note_rounded,
+                color: AppColors.skyBlue,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.isBangla ? 'উপকরণ তথ্য সংশোধন' : 'Edit Appliance',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.isBangla ? item.nameBn : item.nameEn,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.energyGreen,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: wattController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: widget.isBangla
+                      ? 'প্রতিটির ওয়াট (W)'
+                      : 'Wattage per unit (W)',
+                  prefixIcon: const Icon(Icons.bolt_rounded, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: qtyController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: widget.isBangla ? 'উপকরণের সংখ্যা' : 'Quantity',
+                  prefixIcon: const Icon(Icons.numbers_rounded, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: hoursController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: widget.isBangla
+                      ? 'দৈনিক ব্যবহার (ঘণ্টা)'
+                      : 'Daily usage (hours)',
+                  prefixIcon: const Icon(Icons.timer_outlined, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              widget.isBangla ? 'বাতিল' : 'Cancel',
+              style: TextStyle(
+                color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newWatt = double.tryParse(wattController.text) ?? item.watt;
+              final newQty = int.tryParse(qtyController.text) ?? item.quantity;
+              final newHours =
+                  double.tryParse(hoursController.text) ?? item.hoursPerDay;
+
+              setState(() {
+                final index = _currentItems.indexWhere(
+                  (element) => element.id == item.id,
+                );
+                if (index != -1) {
+                  _currentItems[index] = item.copyWith(
+                    watt: newWatt,
+                    quantity: newQty,
+                    hoursPerDay: newHours,
+                  );
+                }
+              });
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.energyGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text(
+              widget.isBangla ? 'সংরক্ষণ' : 'Save',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -45,9 +207,11 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context, _currentItems),
         ),
-        title: Text(
-          widget.isBangla ? 'লোড পর্যালোচনা' : 'Load Summary',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: TwoLineAppBarTitle(
+          title: widget.isBangla ? 'লোড পর্যালোচনা' : 'Load Summary',
+          subtitle: widget.isBangla
+              ? 'এসি ও ডিসি শক্তি হিসাব'
+              : 'AC & DC Energy Breakdown',
         ),
       ),
       body: Container(
@@ -148,7 +312,7 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
 
                           const SizedBox(height: 20),
 
-                          // ৪. ইঞ্জিনিয়ারিং সারসংক্ষেপ কনসোল কার্ড
+                          // ৪. ইঞ্জিনিয়ারিং সারসংক্ষেপ কনসোল কার্ড (ইনভার্টার সংক্রান্ত অংশ বাদ দেওয়া হয়েছে)
                           _buildTactileTotalSummaryCard(engine, isDark),
                         ],
                       ),
@@ -274,17 +438,9 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                   Expanded(
                     flex: (acPct * 10).toInt().clamp(1, 1000),
                     child: Container(
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         gradient: LinearGradient(
-                          colors: isDark
-                              ? [
-                                  const Color(0xFF0284C7),
-                                  const Color(0xFF38BDF8),
-                                ]
-                              : [
-                                  const Color(0xFF0284C7),
-                                  const Color(0xFF38BDF8),
-                                ],
+                          colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
                         ),
                       ),
                     ),
@@ -353,12 +509,12 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     );
   }
 
+  // আপগ্রেডেড আইটেম টাইল: ডিলিটের ঠিক উপরে এডিট বাটন রাখা হয়েছে
   Widget _buildTactileItemTile(ApplianceItem item, bool isDark) {
     final name = widget.isBangla ? item.nameBn : item.nameEn;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -382,86 +538,136 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
                 ),
               ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _showEditItemDialog(item),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
               children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14.5,
-                    color: isDark ? Colors.white : AppColors.lightTextPrimary,
+                // বিবরণ অংশ
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                          color: isDark
+                              ? Colors.white
+                              : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.watt.toStringAsFixed(0)}W × ${item.quantity} | '
+                        '${item.hoursPerDay.toStringAsFixed(1)} '
+                        '${widget.isBangla ? 'ঘণ্টা/দিন' : 'hrs/day'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${item.watt.toStringAsFixed(0)}W × ${item.quantity} | '
-                  '${item.hoursPerDay.toStringAsFixed(1)} '
-                  '${widget.isBangla ? 'ঘণ্টা/দিন' : 'hrs/day'}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : AppColors.lightTextSecondary,
-                  ),
+
+                // এনার্জি ও ওয়াট মান
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${item.dailyEnergyWh.toStringAsFixed(0)} Wh',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        fontFamily: 'monospace',
+                        color: AppColors.energyGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${item.totalWatt.toStringAsFixed(0)} W peak',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+
+                // অ্যাকশন বাটনসমূহ: ডিলিট বাটনের ঠিক উপরে এডিট বাটন
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // এডিট বাটন (উপরে)
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _showEditItemDialog(item),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.skyBlue.withValues(alpha: 0.15)
+                                : const Color(0xFF0284C7)
+                                      .withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            color: isDark
+                                ? AppColors.skyBlue
+                                : const Color(0xFF0284C7),
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // ডিলিট বাটন (নিচে)
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _deleteItem(item.id),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.alertRed.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: AppColors.alertRed,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${item.dailyEnergyWh.toStringAsFixed(0)} Wh',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15,
-                  fontFamily: 'monospace',
-                  color: AppColors.energyGreen,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${item.totalWatt.toStringAsFixed(0)} W peak',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? const Color(0xFF64748B)
-                      : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _deleteItem(item.id),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.alertRed.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: AppColors.alertRed,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
+  // চার নম্বর কার্ড: কেবল মোট দৈনিক শক্তি চাহিদার ওপর কেন্দ্রীভূত
   Widget _buildTactileTotalSummaryCard(
     LoadCalculationEngine engine,
     bool isDark,
@@ -469,31 +675,22 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        // ডার্ক ও লাইট উভয় মোডেই বিশেষ ডিপ এনার্জি-গ্রিন সিগনেচার ব্যাকগ্রাউন্ড
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [
-                  const Color(0xFF042416), // ডার্ক মোডের বিশেষ ডিপ পাইন
-                  const Color(0xFF071B12), // গভীর মেটালিক এমারেল্ড শেড
-                ]
-              : [
-                  const Color(0xFF063A24), // লাইট মোডের মূল গাঢ় সবুজ
-                  const Color(0xFF0F4D32),
-                ],
+              ? [const Color(0xFF042416), const Color(0xFF071B12)]
+              : [const Color(0xFF063A24), const Color(0xFF0F4D32)],
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark
-              ? const Color(0xFF10B981)
-                    .withValues(alpha: 0.55) // ডার্কে স্পষ্ট নিয়ন ফ্রেম
-              : const Color(0xFF047857), // লাইটে শার্প এমারেল্ড বর্ডার
+              ? const Color(0xFF10B981).withValues(alpha: 0.55)
+              : const Color(0xFF047857),
           width: 1.6,
         ),
         boxShadow: isDark
             ? [
-                // ডার্ক মোডের অনন্য এমারেল্ড গ্লো
                 BoxShadow(
                   color: const Color(0xFF059669).withValues(alpha: 0.22),
                   blurRadius: 16,
@@ -548,20 +745,16 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
           ),
           const Divider(color: Colors.white24, height: 20),
           _buildSummaryRow(
-            label: widget.isBangla
-                ? 'এসি দৈনিক চাহিদা (ΣLac):'
-                : 'AC Daily Demand (ΣLac):',
+            label: widget.isBangla ? 'এসি দৈনিক চাহিদা:' : 'AC Daily Demand:',
             value: '${engine.sigmaLac.toStringAsFixed(1)} Wh/day',
           ),
           _buildSummaryRow(
-            label: widget.isBangla
-                ? 'ডিসি দৈনিক চাহিদা (ΣLdc):'
-                : 'DC Daily Demand (ΣLdc):',
+            label: widget.isBangla ? 'ডিসি দৈনিক চাহিদা:' : 'DC Daily Demand:',
             value: '${engine.sigmaLdc.toStringAsFixed(1)} Wh/day',
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.20),
               borderRadius: BorderRadius.circular(12),
@@ -574,28 +767,13 @@ class _LoadSummaryScreenState extends State<LoadSummaryScreen> {
             ),
             child: _buildSummaryRow(
               label: widget.isBangla
-                  ? 'সর্বমোট দৈনিক শক্তি (ΣLtotal):'
-                  : 'Total Daily Energy (ΣLtotal):',
+                  ? 'সর্বমোট দৈনিক শক্তি:'
+                  : 'Total Daily Energy:',
               value: '${engine.sigmaLtotal.toStringAsFixed(1)} Wh/day',
               isBold: true,
               fontSize: 15,
               valueColor: isDark ? const Color(0xFF34D399) : Colors.white,
             ),
-          ),
-          const Divider(color: Colors.white24, height: 22),
-          _buildSummaryRow(
-            label: widget.isBangla
-                ? 'ইনভার্টারের এসি পিক লোড (ΣLa):'
-                : 'AC Peak Load for Inverter (ΣLa):',
-            value: '${engine.sigmaLa.toStringAsFixed(0)} W',
-          ),
-          _buildSummaryRow(
-            label: widget.isBangla
-                ? 'প্রস্তাবিত ইনভার্টার রেটিং (১.২৫×):'
-                : 'Recommended Inverter Rating (1.25×):',
-            value: '≥ ${engine.recommendedInverterWatt.toStringAsFixed(0)} W',
-            valueColor: AppColors.solarGold,
-            isBold: true,
           ),
         ],
       ),

@@ -6,6 +6,7 @@ import '../services/solar_calculation_service.dart';
 import '../services/solar_radiation_service.dart';
 import 'system_calculation_summary_screen.dart';
 import 'system_diagram_screen.dart';
+import '../widgets/app_bar_title.dart';
 
 class SystemParametersScreen extends StatefulWidget {
   final double dailyTotalWh;
@@ -36,7 +37,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
   late bool _isBangla;
   bool _isLoadingPsh = false;
   SolarRadiationResult? _pshResult;
-  String _selectedBatteryType = 'lead_acid';
+  String _selectedBatteryType = 'tubular'; // বাংলাদেশে বহুল প্রচলিত স্ট্যান্ডার্ড টিউবুলার ডিফল্ট রাখা হয়েছে
   SolarSystemType _selectedSystemType = SolarSystemType.offGrid;
 
   @override
@@ -48,10 +49,14 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
       widget.acPeakWatt,
       systemType: _selectedSystemType,
     );
+    _applyBatteryTypePreset(_selectedBatteryType);
+
     final recommendedPanels = _getRecommendedPanelPowers();
-    final recommendedBatteries = _getRecommendedBatteryCapacities();
     _updatePanelParametersFromWatts(recommendedPanels.first);
+
+    final recommendedBatteries = _getRecommendedBatteryCapacities();
     _params.batteryCapacityAh = recommendedBatteries.first;
+
     _fetchNasaPshData();
   }
 
@@ -67,10 +72,20 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     return [350.0, 450.0, 550.0, 650.0];
   }
 
+  // ব্যাটারির কেমিস্ট্রি অনুযায়ী প্রচলিত ক্যাপাসিটি রেটিং সুপারিশ
   List<double> _getRecommendedBatteryCapacities() {
-    if (widget.dailyTotalWh <= 800) return [40.0, 50.0, 80.0, 100.0];
-    if (widget.dailyTotalWh <= 2500) return [100.0, 130.0, 150.0, 200.0];
-    return [150.0, 200.0, 230.0, 260.0];
+    if (_selectedBatteryType == 'lithium') {
+      return [50.0, 100.0, 150.0, 200.0];
+    } else if (_selectedBatteryType == 'tubular') {
+      if (widget.dailyTotalWh <= 800) return [80.0, 100.0, 130.0, 150.0];
+      if (widget.dailyTotalWh <= 2500) return [130.0, 150.0, 180.0, 200.0];
+      return [150.0, 200.0, 230.0, 260.0];
+    } else {
+      // সাধারণ ফ্ল্যাটেড লেড-এসিড
+      if (widget.dailyTotalWh <= 800) return [40.0, 50.0, 80.0, 100.0];
+      if (widget.dailyTotalWh <= 2500) return [100.0, 120.0, 150.0, 180.0];
+      return [130.0, 150.0, 180.0, 200.0];
+    }
   }
 
   void _updatePanelParametersFromWatts(double watts) {
@@ -121,7 +136,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
             ? 22.5
             : ((watts <= 300.0) ? 37.0 : 48.0);
         double estimatedVmp = estimatedVoc * 0.81;
-        double estimatedImp = watts / estimatedVmp;
+        double estimatedImp = watts / (estimatedVmp > 0 ? estimatedVmp : 18.0);
         double estimatedIsc = estimatedImp * 1.07;
         _params.panelVoc = double.parse(estimatedVoc.toStringAsFixed(2));
         _params.panelImp = double.parse(estimatedImp.toStringAsFixed(2));
@@ -130,18 +145,25 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
     });
   }
 
+  // 🌟 ইউনিফাইড ব্যাটারি কেমিস্ট্রি প্যারামিটার ম্যাপিং
   void _applyBatteryTypePreset(String type) {
     setState(() {
       _selectedBatteryType = type;
       if (type == 'lead_acid') {
         _params.batteryEfficiency = 80.0;
-        _params.batteryDod = 70.0;
+        _params.batteryDod = 50.0; // সংশোধিত: লেড-এসিডের নিরাপদ সীমা ৫০%
       } else if (type == 'tubular') {
         _params.batteryEfficiency = 85.0;
-        _params.batteryDod = 50.0;
+        _params.batteryDod =
+            75.0; // সংশোধিত: ডিপ-সাইকেল টিউবুলার ৭৫% DoD সহ্য করতে পারে
       } else if (type == 'lithium') {
         _params.batteryEfficiency = 95.0;
         _params.batteryDod = 85.0;
+      }
+      // ক্যাপাসিটি রেঞ্জ পুনর্নির্ধারণ
+      final recBatts = _getRecommendedBatteryCapacities();
+      if (!recBatts.contains(_params.batteryCapacityAh)) {
+        _params.batteryCapacityAh = recBatts.first;
       }
     });
   }
@@ -331,31 +353,34 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
       return '$current';
     }
 
-    final approxPanels = (_params.panelPmax > 0 && _params.peakSunHours > 0)
-        ? (widget.dailyTotalWh /
-                  (_params.peakSunHours * _params.panelPmax * 0.75))
-              .ceil()
-        : 1;
+    // 🌟 কার্যকর লোড ও চূড়ান্ত ইঞ্জিন ক্যালকুলেশন সিঙ্ক (SolarCalculationService-এর সাথে সরাসরি সংযুক্ত)
+    final double acWh = widget.dailyAcWh > 0
+        ? widget.dailyAcWh
+        : (widget.acPeakWatt > 0 ? widget.dailyTotalWh : 0.0);
+    final double dcWh = widget.dailyDcWh > 0
+        ? widget.dailyDcWh
+        : (widget.acPeakWatt == 0 ? widget.dailyTotalWh : 0.0);
 
-    final approxBatteries =
-        (!isGridTied &&
-            _params.batteryCapacityAh > 0 &&
-            _params.batteryDod > 0 &&
-            _params.batteryEfficiency > 0)
-        ? (widget.dailyTotalWh *
-                  _params.autonomyDays /
-                  (_params.systemVoltage *
-                      _params.batteryCapacityAh *
-                      (_params.batteryDod / 100) *
-                      (_params.batteryEfficiency / 100)))
-              .ceil()
-        : 0;
+    final currentWorkingParams = _params.copyWith(
+      systemType: _selectedSystemType,
+    );
+
+    final liveResult = SolarCalculationService.calculate(
+      dailyAcWh: acWh,
+      dailyDcWh: dcWh,
+      acPeakWatt: widget.acPeakWatt,
+      params: currentWorkingParams,
+    );
+
+    final double totalArrayKwp = liveResult.totalArrayWatt / 1000.0;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: TwoLineAppBarTitle(
+          title: _isBangla ? 'সিস্টেম প্যারামিটার' : 'System Parameters',
+          subtitle: _isBangla
+              ? 'ভোল্টেজ, প্যানেল ও ব্যাটারি সেটিংস'
+              : 'Voltage, PV & Battery Config',
         ),
         actions: [
           Container(
@@ -410,7 +435,6 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
         ),
         child: Column(
           children: [
-            // ১. স্ক্রোলযোগ্য প্যারামিটার কনটেন্ট
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -617,7 +641,9 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                 children: [
                                   _buildControllerTypeButton(
                                     type: 'mppt',
-                                    title: 'MPPT (আধুনিক)',
+                                    title: _isBangla
+                                        ? 'MPPT (আধুনিক)'
+                                        : 'MPPT (Advanced)',
                                     subtitle: _isBangla
                                         ? 'উচ্চ দক্ষতা (৯৮%)'
                                         : 'High Eff (98%)',
@@ -626,7 +652,9 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                   const SizedBox(width: 8),
                                   _buildControllerTypeButton(
                                     type: 'pwm',
-                                    title: 'PWM (সাধারণ)',
+                                    title: _isBangla
+                                        ? 'PWM (সাধারণ)'
+                                        : 'PWM (Standard)',
                                     subtitle: _isBangla
                                         ? 'বাজেট (৭০-৭৫%)'
                                         : 'Budget (75%)',
@@ -891,7 +919,7 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
               ),
             ),
 
-            // ২. নিচে থাকা ৩ডি ইঞ্জিনিয়ারিং কন্ট্রোল ডক (আলাদা বটম প্ল্যাটফর্ম)
+            // ২. নিচে থাকা ৩ডি ইঞ্জিনিয়ারিং কন্ট্রোল ডক (আধুনিক ও সুসংগত ৩টি মেট্রিক)
             Container(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               decoration: BoxDecoration(
@@ -927,52 +955,48 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // কেপিআই ডিসপ্লে ডক
                     Row(
                       children: [
+                        // ১ম কার্ড: প্রস্তাবিত সোলার ক্ষমতা (kWp)
                         Expanded(
                           child: _buildQuickKPI(
-                            label: _isBangla ? 'সিস্টেম' : 'Architecture',
-                            value: isGridTied
-                                ? 'On-Grid'
-                                : (isHybrid
-                                      ? 'Hybrid'
-                                      : _params.controllerType.toUpperCase()),
-                            icon: isGridTied
-                                ? Icons.solar_power_rounded
-                                : (isHybrid
-                                      ? Icons.sync_alt_rounded
-                                      : Icons.tune_rounded),
+                            label: _isBangla ? 'সোলার ক্ষমতা' : 'Array Power',
+                            value: '${totalArrayKwp.toStringAsFixed(2)} kWp',
+                            icon: Icons.solar_power_rounded,
                             isDark: isDark,
                           ),
                         ),
                         const SizedBox(width: 8),
+                        // ২য় কার্ড: প্যানেল সংখ্যা
                         Expanded(
                           child: _buildQuickKPI(
-                            label: _isBangla ? 'প্যানেল সংখ্যা' : 'Est. Panels',
-                            value: '~$approxPanels pcs',
+                            label: _isBangla ? 'প্যানেল সংখ্যা' : 'PV Modules',
+                            value:
+                                '${liveResult.totalPanels} ${_isBangla ? "টি" : "pcs"}',
                             icon: Icons.grid_view_rounded,
                             isDark: isDark,
                           ),
                         ),
-                        if (!isGridTied) ...[
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildQuickKPI(
-                              label: _isBangla
-                                  ? 'ব্যাটারি সংখ্যা'
-                                  : 'Est. Batteries',
-                              value: '~$approxBatteries pcs',
-                              icon: Icons.battery_charging_full_rounded,
-                              isDark: isDark,
-                            ),
+                        const SizedBox(width: 8),
+                        // ৩য় কার্ড: ব্যাটারি সংখ্যা অথবা গ্রিড ইনফো
+                        Expanded(
+                          child: _buildQuickKPI(
+                            label: isGridTied
+                                ? (_isBangla ? 'ব্যাটারি ব্যবস্থা' : 'Storage')
+                                : (_isBangla ? 'ব্যাটারি সংখ্যা' : 'Batteries'),
+                            value: isGridTied
+                                ? (_isBangla ? 'ব্যাটারিহীন' : 'No Battery')
+                                : '${liveResult.totalBatteries} ${_isBangla ? "টি" : "pcs"}',
+                            icon: isGridTied
+                                ? Icons.grid_off_rounded
+                                : Icons.battery_charging_full_rounded,
+                            isDark: isDark,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
 
-                    // প্রধান অ্যাকশন বাটন
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -991,37 +1015,15 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                           ),
                         ),
                         onPressed: () {
-                          final double acWh = widget.dailyAcWh > 0
-                              ? widget.dailyAcWh
-                              : (widget.acPeakWatt > 0
-                                    ? widget.dailyTotalWh
-                                    : 0.0);
-                          final double dcWh = widget.dailyDcWh > 0
-                              ? widget.dailyDcWh
-                              : (widget.acPeakWatt == 0
-                                    ? widget.dailyTotalWh
-                                    : 0.0);
-
-                          final finalParams = _params.copyWith(
-                            systemType: _selectedSystemType,
-                          );
-
-                          final result = SolarCalculationService.calculate(
-                            dailyAcWh: acWh,
-                            dailyDcWh: dcWh,
-                            acPeakWatt: widget.acPeakWatt,
-                            params: finalParams,
-                          );
-
-                          widget.onProceedToFinalResults(finalParams);
+                          widget.onProceedToFinalResults(currentWorkingParams);
 
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
                                   SystemCalculationSummaryScreen(
-                                    result: result,
-                                    params: finalParams,
+                                    result: liveResult,
+                                    params: currentWorkingParams,
                                     isBangla: _isBangla,
                                     onProceedToDiagram: () {
                                       Navigator.push(
@@ -1029,8 +1031,8 @@ class _SystemParametersScreenState extends State<SystemParametersScreen> {
                                         MaterialPageRoute(
                                           builder: (context) =>
                                               SystemDiagramScreen(
-                                                result: result,
-                                                params: finalParams,
+                                                result: liveResult,
+                                                params: currentWorkingParams,
                                                 isBangla: _isBangla,
                                               ),
                                         ),

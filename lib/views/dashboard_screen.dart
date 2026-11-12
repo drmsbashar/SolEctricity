@@ -11,6 +11,7 @@ import '../widgets/theme_toggle_button.dart';
 import '../widgets/solar_fusion_sun.dart';
 import 'about_screen.dart';
 import 'capacity_based_solar_screen.dart';
+import 'contact_screen.dart';
 import 'cost_based_solar_screen.dart';
 import 'installation_screen.dart';
 import 'land_based_solar_screen.dart';
@@ -73,7 +74,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         );
 
-    // প্রারম্ভিক মান 0.0 করায় শুরুতে বাটনগুলো স্ক্রিনের বাইরে থাকবে
     _controlsAnimationController.value = 0.0;
   }
 
@@ -109,6 +109,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // 🌟 স্ক্রিন সাইজ অনুযায়ী ডায়নামিক স্কেলিং (সর্বনিম্ন ও সর্বোচ্চ সীমা সহ)
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double dynamicLogoHeight = (screenHeight * 0.075).clamp(52.0, 78.0);
+    final double dynamicSunSize = (screenHeight * 0.10).clamp(72.0, 96.0);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -172,79 +177,88 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                   const Spacer(flex: 3),
 
-                  // ৩.১ ব্যানারহীন ওপেন টাইটেল সেকশন
+                  // ৩.১ ব্যানারহীন ওপেন টাইটেল সেকশন (ডায়নামিক ও ফুল ব্লক ট্যাপযোগ্য)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // সোলার ফিউশন সূর্য আইকন
-                        GestureDetector(
-                          onTap: toggleMenu,
-                          behavior: HitTestBehavior.opaque,
-                          child: const SolarFusionSun(size: 90, isMini: true),
-                        ),
-                        const SizedBox(width: 14),
+                    child: GestureDetector(
+                      onTap: toggleMenu,
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // 🌟 ডায়নামিক সাইজের ফিউশন-সান
+                          SolarFusionSun(size: dynamicSunSize, isMini: true),
+                          const SizedBox(width: 14),
 
-                        // লোগো ও সাবটাইটেল
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Image.asset(
-                                isBangla ? AppAssets.logoBn : AppAssets.logoEn,
-                                height: 76,
-                                fit: BoxFit.contain,
-                                alignment: Alignment.centerLeft,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Text(
-                                      isBangla
-                                          ? 'সূর্য বিদ্যুৎ'
-                                          : 'SolEctricity',
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w900,
-                                        color: isDark
-                                            ? AppColors.energyGreen
-                                            : AppColors.titleRed,
-                                        shadows: const [
-                                          Shadow(
-                                            color: Colors.black38,
-                                            blurRadius: 4,
-                                            offset: Offset(1, 1),
-                                          ),
-                                        ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // 🌟 ডায়নামিক উচ্চতার লোগো
+                                Image.asset(
+                                  isBangla
+                                      ? AppAssets.logoBn
+                                      : AppAssets.logoEn,
+                                  height: dynamicLogoHeight,
+                                  fit: BoxFit.contain,
+                                  alignment: Alignment.centerLeft,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Text(
+                                        isBangla
+                                            ? 'সূর্য বিদ্যুৎ'
+                                            : 'SolEctricity',
+                                        style: TextStyle(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w900,
+                                          color: isDark
+                                              ? AppColors.energyGreen
+                                              : AppColors.titleRed,
+                                          shadows: const [
+                                            Shadow(
+                                              color: Colors.black38,
+                                              blurRadius: 4,
+                                              offset: Offset(1, 1),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                isBangla
-                                    ? 'ঘরের মাঝে রবির কিরণ'
-                                    : 'Plug to the Sun',
-                                style: TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.3,
-                                  color: isDark
-                                      ? AppColors.darkTextPrimary
-                                      : AppColors.textDark,
-                                  shadows: [
-                                    Shadow(
-                                      color: isDark
-                                          ? Colors.black87
-                                          : Colors.white.withValues(alpha: 0.8),
-                                      blurRadius: 3,
-                                      offset: const Offset(1, 1),
-                                    ),
-                                  ],
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 6),
+                                // 🌟 স্লোগানে FittedBox যুক্ত করা হলো যাতে কোনো ডিভাইসেই লাইন ভেঙে না যায়
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    isBangla
+                                        ? 'ঘরের মাঝে রবির কিরণ'
+                                        : 'Plug into the Sun',
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.3,
+                                      color: isDark
+                                          ? AppColors.darkTextPrimary
+                                          : AppColors.textDark,
+                                      shadows: [
+                                        Shadow(
+                                          color: isDark
+                                              ? Colors.black87
+                                              : Colors.white.withValues(
+                                                  alpha: 0.8,
+                                                ),
+                                          blurRadius: 3,
+                                          offset: const Offset(1, 1),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
 
@@ -324,7 +338,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
 
-            // ৫. ফ্লোটিং স্লাইডিং কন্ট্রোলস (ড্রয়ার বাটন - বাঁ দিক থেকে স্লাইড ইন/আউট)
+            // ৫. ফ্লোটিং স্লাইডিং কন্ট্রোলস (ড্রয়ার বাটন)
             Positioned(
               top: 0,
               left: 0,
@@ -349,7 +363,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
 
-            // ৬. ফ্লোটিং স্লাইডিং কন্ট্রোলস (মোড ও ভাষা বাটন - ডান দিক থেকে স্লাইড ইন/আউট)
+            // ৬. ফ্লোটিং স্লাইডিং কন্ট্রোলস (মোড ও ভাষা বাটন)
             Positioned(
               top: 0,
               right: 0,
@@ -510,8 +524,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       _launchBcsirWebsite();
       return;
     }
+
+    // 🌟 ডায়ালগের পরিবর্তে সরাসরি ContactScreen ওপেন করা হচ্ছে
     if (option == 'Contact' || option == 'যোগাযোগ') {
-      _showContactDialog(context);
+      _openScreen(ContactScreen(isBangla: isBangla));
       return;
     }
 
@@ -622,82 +638,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           isBangla ? '$option পেজ লোড হচ্ছে...' : 'Loading $option...',
         ),
         duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  void _showContactDialog(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppColors.darkCardBg : AppColors.lightCardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Row(
-          children: [
-            Icon(
-              Icons.mail_outline_rounded,
-              color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              isBangla ? 'যোগাযোগ' : 'Contact',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : AppColors.lightTextPrimary,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isBangla
-                  ? 'পরবর্তী কোন সংশোধন, তথ্য ও পরামর্শের জন্য ইমেইলে যোগাযোগ করুন:'
-                  : 'For any additional correction, information, or suggestion, please contact through e-mail:',
-              style: TextStyle(
-                fontSize: 13.5,
-                height: 1.45,
-                color: isDark ? AppColors.darkTextSecondary : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkInputBg : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : Colors.grey.shade300,
-                ),
-              ),
-              child: SelectableText(
-                'bashar@agni.com\nbashar@bcsir.gov.bd',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? AppColors.accentCyan : AppColors.primaryGreen,
-                  height: 1.5,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              isBangla ? 'ঠিক আছে' : 'OK',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppColors.accentCyan : AppColors.energyGreen,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

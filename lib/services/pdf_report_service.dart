@@ -1,8 +1,8 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -11,30 +11,38 @@ import 'package:printing/printing.dart';
 import '../constants/app_assets.dart';
 import '../models/solar_calculation_result.dart';
 import '../models/system_sizing_params.dart';
+import '../views/widgets/wiring_painters.dart';
 
 class PdfReportService {
-  /// ১ নম্বর পৃষ্ঠার সম্পূর্ণ টেবিল ও তথ্যকে ফ্লাটার ক্যানভাস দিয়ে হাই-রেজোলিউশন ইমেজ হিসেবে তৈরি করা
+  // A4 স্ট্যান্ডার্ড পিক্সেল স্কেল (150 DPI)
+  static const double a4PortraitW = 1240.0;
+  static const double a4PortraitH = 1754.0;
+  static const double a4LandscapeW = 1754.0;
+  static const double a4LandscapeH = 1240.0;
+
+  // =========================================================================
+  // পৃষ্ঠা ১: সম্পূর্ণ স্পেসিফিকেশন রিপোর্ট (A4 Portrait)
+  // =========================================================================
   static Future<Uint8List> _renderPage1Image({
     required SolarCalculationResult result,
     required SystemSizingParams params,
     required bool isBangla,
     ui.Image? bcsirLogoUiImage,
   }) async {
-    const double width = 1240.0; // A4 150 DPI Scale Width
-    const double height = 1754.0; // A4 150 DPI Scale Height
-
     final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, width, height));
+    final canvas = Canvas(
+      recorder,
+      const Rect.fromLTWH(0, 0, a4PortraitW, a4PortraitH),
+    );
 
-    // সাদা ব্যাকগ্রাউন্ড
     canvas.drawRect(
-      const Rect.fromLTWH(0, 0, width, height),
+      const Rect.fromLTWH(0, 0, a4PortraitW, a4PortraitH),
       Paint()..color = Colors.white,
     );
 
     double curY = 60.0;
     const double marginX = 60.0;
-    const double contentW = width - (marginX * 2);
+    const double contentW = a4PortraitW - (marginX * 2);
 
     String archName;
     if (params.systemType == SolarSystemType.gridTied) {
@@ -54,7 +62,6 @@ class PdfReportService {
     final isGridTied = params.systemType == SolarSystemType.gridTied;
     final isHybrid = params.systemType == SolarSystemType.hybrid;
 
-    // --- হেডার সেকশন ---
     _drawText(
       canvas,
       Offset(marginX, curY),
@@ -71,7 +78,7 @@ class PdfReportService {
     final dateStr = DateTime.now().toString().split(' ')[0];
     _drawTextRight(
       canvas,
-      Offset(width - marginX, curY + 6),
+      Offset(a4PortraitW - marginX, curY + 6),
       dateStr,
       const TextStyle(
         color: Color(0xFF64748B),
@@ -93,19 +100,16 @@ class PdfReportService {
     );
     curY += 28;
 
-    // সবুজ ডিভাইডার লাইন
     canvas.drawLine(
       Offset(marginX, curY),
-      Offset(width - marginX, curY),
+      Offset(a4PortraitW - marginX, curY),
       Paint()
         ..color = const Color(0xFF15803D)
         ..strokeWidth = 3.0,
     );
     curY += 24;
 
-    // --- টেবিল রেন্ডারিং হেল্পার মেথড ---
     void drawSectionTable(String title, List<List<String>> rows) {
-      // সেকশন শিরোনাম
       _drawText(
         canvas,
         Offset(marginX, curY),
@@ -118,11 +122,10 @@ class PdfReportService {
       );
       curY += 28;
 
-      final double rowHeight = 36.0;
+      const double rowHeight = 36.0;
       final double tableH = rows.length * rowHeight;
       final tableRect = Rect.fromLTWH(marginX, curY, contentW, tableH);
 
-      // টেবিল আউটলাইন
       canvas.drawRect(
         tableRect,
         Paint()
@@ -134,7 +137,6 @@ class PdfReportService {
       for (int i = 0; i < rows.length; i++) {
         final rowY = curY + (i * rowHeight);
 
-        // বিকল্প হালকা ব্যাকগ্রাউন্ড
         if (i % 2 == 1) {
           canvas.drawRect(
             Rect.fromLTWH(marginX, rowY, contentW, rowHeight),
@@ -142,18 +144,16 @@ class PdfReportService {
           );
         }
 
-        // নিচের ডিভাইডার
         if (i < rows.length - 1) {
           canvas.drawLine(
             Offset(marginX, rowY + rowHeight),
-            Offset(width - marginX, rowY + rowHeight),
+            Offset(a4PortraitW - marginX, rowY + rowHeight),
             Paint()
               ..color = const Color(0xFFE2E8F0)
               ..strokeWidth = 1.0,
           );
         }
 
-        // কলাম টেক্সট (বাম ও ডান)
         _drawText(
           canvas,
           Offset(marginX + 16, rowY + 8),
@@ -167,7 +167,7 @@ class PdfReportService {
 
         _drawTextRight(
           canvas,
-          Offset(width - marginX - 16, rowY + 8),
+          Offset(a4PortraitW - marginX - 16, rowY + 8),
           rows[i][1],
           const TextStyle(
             color: Color(0xFF047857),
@@ -179,7 +179,6 @@ class PdfReportService {
       curY += tableH + 22;
     }
 
-    // ১. লোড ও ডিজাইন প্যারামিটার
     drawSectionTable(
       isBangla ? '১. লোড ও ডিজাইন প্যারামিটার' : '1. Load & Design Parameters',
       [
@@ -204,7 +203,6 @@ class PdfReportService {
       ],
     );
 
-    // ২. সোলার পিভি অ্যারে কনফিগারেশন
     drawSectionTable(
       isBangla
           ? '২. সোলার পিভি অ্যারে কনফিগারেশন'
@@ -237,7 +235,6 @@ class PdfReportService {
       ],
     );
 
-    // ৩. ব্যাটারি স্টোরেজ ব্যাংক
     if (!isGridTied) {
       drawSectionTable(
         isBangla ? '৩. ব্যাটারি স্টোরেজ ব্যাংক' : '3. Battery Storage Bank',
@@ -266,7 +263,6 @@ class PdfReportService {
       );
     }
 
-    // ৪. পাওয়ার ইলেকট্রনিক্স
     drawSectionTable(
       isGridTied
           ? (isBangla ? '৩. পাওয়ার ইলেকট্রনিক্স' : '3. Power Electronics')
@@ -291,13 +287,12 @@ class PdfReportService {
                     : 'Grid-Tied String Inverter')
               : (isBangla ? 'ইনভার্টার ক্ষমতা' : 'Inverter Capacity'),
           isGridTied
-              ? '${(result.inverterCapacityVa / 1000).toStringAsFixed(1)} kW (220V/50Hz On-Grid)'
+              ? '${(result.inverterCapacityVa / 1000).toStringAsFixed(1)} kW (220V/50Hz On-Grid, DC/AC ≈ 1.15)'
               : '≥ ${result.inverterCapacityVa.toInt()} VA (${result.inverterVoltage.toInt()}V DC ➔ 220V AC)',
         ],
       ],
     );
 
-    // ৫. সুরক্ষা ব্যবস্থা ও তারের সাইজ
     drawSectionTable(
       isGridTied
           ? (isBangla
@@ -343,26 +338,332 @@ class PdfReportService {
       ],
     );
 
-    // --- ফুটার সেকশন (লোগো ও নাম) ---
-    const double footerY = height - 70;
+    _drawCanvasFooter(
+      canvas,
+      a4PortraitW,
+      a4PortraitH,
+      bcsirLogoUiImage,
+      isBangla,
+    );
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(a4PortraitW.toInt(), a4PortraitH.toInt());
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  // =========================================================================
+  // পৃষ্ঠা ২: সামগ্রিক সিস্টেম ওয়্যারিং (Full A4 Landscape ক্যানভাস)
+  // =========================================================================
+  static Future<Uint8List> _renderPage2SchematicImage({
+    required SolarCalculationResult result,
+    required SystemSizingParams params,
+    required bool isBangla,
+    ui.Image? bcsirLogoUiImage,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      const Rect.fromLTWH(0, 0, a4LandscapeW, a4LandscapeH),
+    );
+
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 0, a4LandscapeW, a4LandscapeH),
+      Paint()..color = Colors.white,
+    );
+
+    const double marginX = 50.0;
+    _drawText(
+      canvas,
+      const Offset(marginX, 35),
+      isBangla
+          ? 'সিস্টেম ওয়্যারিং ডায়াগ্রাম (SYSTEM SCHEMATIC BLUEPRINT)'
+          : 'SYSTEM SCHEMATIC WIRING BLUEPRINT',
+      const TextStyle(
+        color: Color(0xFF14532D),
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawTextRight(
+      canvas,
+      const Offset(a4LandscapeW - marginX, 40),
+      'Engineering Overall Blueprint',
+      const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+
     canvas.drawLine(
-      const Offset(marginX, footerY),
-      const Offset(width - marginX, footerY),
+      const Offset(marginX, 75),
+      const Offset(a4LandscapeW - marginX, 75),
+      Paint()
+        ..color = const Color(0xFF15803D)
+        ..strokeWidth = 2.5,
+    );
+
+    const double targetW = a4LandscapeW - (marginX * 2);
+    const double targetH = a4LandscapeH - 180.0;
+    const double origW = 1140.0;
+    const double origH = 620.0;
+
+    final double scale = math.min(targetW / origW, targetH / origH);
+    final double offsetX = marginX + (targetW - (origW * scale)) / 2;
+    final double offsetY = 90.0 + (targetH - (origH * scale)) / 2;
+
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale, scale);
+
+    final painter = SolarRealisticWiringPainter(
+      result: result,
+      params: params,
+      isBangla: isBangla,
+      isDark: false,
+      isForPrint: true,
+    );
+    painter.paint(canvas, const Size(origW, origH));
+    canvas.restore();
+
+    _drawCanvasFooter(
+      canvas,
+      a4LandscapeW,
+      a4LandscapeH,
+      bcsirLogoUiImage,
+      isBangla,
+    );
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(
+      a4LandscapeW.toInt(),
+      a4LandscapeH.toInt(),
+    );
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  // =========================================================================
+  // পৃষ্ঠা ৩: সোলার প্যানেল বাস্তব সংযোগ (Full A4 Landscape ক্যানভাস)
+  // =========================================================================
+  static Future<Uint8List> _renderPage3PvDetailImage({
+    required SolarCalculationResult result,
+    required bool isBangla,
+    ui.Image? bcsirLogoUiImage,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      const Rect.fromLTWH(0, 0, a4LandscapeW, a4LandscapeH),
+    );
+
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 0, a4LandscapeW, a4LandscapeH),
+      Paint()..color = Colors.white,
+    );
+
+    const double marginX = 50.0;
+    _drawText(
+      canvas,
+      const Offset(marginX, 35),
+      isBangla
+          ? 'সোলার পিভি অ্যারে বাস্তব স্ট্রিং বিন্যাস (PV ARRAY BLUEPRINT)'
+          : 'SOLAR PV ARRAY STRING WIRING BLUEPRINT',
+      const TextStyle(
+        color: Color(0xFF0369A1),
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawTextRight(
+      canvas,
+      const Offset(a4LandscapeW - marginX, 40),
+      isBangla
+          ? 'মোট: ${result.totalPanels}টি প্যানেল (${result.panelsSeries}S × ${result.panelsParallel}P)'
+          : 'Config: ${result.totalPanels} Panels (${result.panelsSeries}S × ${result.panelsParallel}P)',
+      const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+
+    canvas.drawLine(
+      const Offset(marginX, 75),
+      const Offset(a4LandscapeW - marginX, 75),
+      Paint()
+        ..color = const Color(0xFF0284C7)
+        ..strokeWidth = 2.5,
+    );
+
+    // 🌟 স্কেলিং বাউন্ডিং লজিক সিঙ্ক (CleanPanelVisualPainter-এর সঠিক অনুপাত)
+    final int pvs = result.panelsSeries;
+    final int pvp = result.panelsParallel;
+    final double innerScale = pvs <= 3 ? 1.0 : (pvs <= 6 ? 0.82 : 0.68);
+    final double rawGridW = ((pvs * 95.0) + ((pvs - 1) * 35.0)) * innerScale;
+    final double rawW = math.max(650.0, rawGridW + 280.0);
+    final double rawH = math.max(380.0, 110.0 + (pvp * (180.0 * innerScale)));
+
+    const double targetW = a4LandscapeW - (marginX * 2);
+    const double targetH = a4LandscapeH - 180.0;
+    final double scale = math.min(targetW / rawW, targetH / rawH);
+    final double offsetX = marginX + (targetW - (rawW * scale)) / 2;
+    final double offsetY = 95.0 + (targetH - (rawH * scale)) / 2;
+
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale, scale);
+
+    final painter = CleanPanelVisualPainter(
+      pvs: pvs,
+      pvp: pvp,
+      isBangla: isBangla,
+    );
+    painter.paint(canvas, Size(rawW, rawH));
+    canvas.restore();
+
+    _drawCanvasFooter(
+      canvas,
+      a4LandscapeW,
+      a4LandscapeH,
+      bcsirLogoUiImage,
+      isBangla,
+    );
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(
+      a4LandscapeW.toInt(),
+      a4LandscapeH.toInt(),
+    );
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  // =========================================================================
+  // পৃষ্ঠা ৪: ব্যাটারি ব্যাংক বাস্তব সংযোগ (Full A4 Landscape ক্যানভাস)
+  // =========================================================================
+  static Future<Uint8List> _renderPage4BatteryDetailImage({
+    required SolarCalculationResult result,
+    required SystemSizingParams params,
+    required bool isBangla,
+    ui.Image? bcsirLogoUiImage,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      const Rect.fromLTWH(0, 0, a4LandscapeW, a4LandscapeH),
+    );
+
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 0, a4LandscapeW, a4LandscapeH),
+      Paint()..color = Colors.white,
+    );
+
+    const double marginX = 50.0;
+    _drawText(
+      canvas,
+      const Offset(marginX, 35),
+      isBangla
+          ? 'ব্যাটারি ব্যাংক টার্মিনাল ও জাম্পার সংযোগ বিন্যাস (BATTERY BANK BLUEPRINT)'
+          : 'BATTERY BANK TERMINAL & JUMPER WIRING BLUEPRINT',
+      const TextStyle(
+        color: Color(0xFFB45309),
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    _drawTextRight(
+      canvas,
+      const Offset(a4LandscapeW - marginX, 40),
+      isBangla
+          ? 'মোট: ${result.totalBatteries}টি ব্যাটারি (${result.batteriesSeries}S × ${result.batteriesParallel}P = ${params.systemVoltage.toInt()}V)'
+          : 'Config: ${result.totalBatteries} Batteries (${result.batteriesSeries}S × ${result.batteriesParallel}P = ${params.systemVoltage.toInt()}V)',
+      const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+
+    canvas.drawLine(
+      const Offset(marginX, 75),
+      const Offset(a4LandscapeW - marginX, 75),
+      Paint()
+        ..color = const Color(0xFFD97706)
+        ..strokeWidth = 2.5,
+    );
+
+    // 🌟 স্কেলিং বাউন্ডিং লজিক সিঙ্ক (CleanBatteryVisualPainter-এর সঠিক অনুপাত)
+    final int bs = result.batteriesSeries;
+    final int bp = result.batteriesParallel;
+    final double innerScale = bs <= 2 ? 1.0 : (bs <= 4 ? 0.85 : 0.70);
+    final double rawGridW = ((bs * 105.0) + ((bs - 1) * 35.0)) * innerScale;
+    final double rawW = math.max(650.0, rawGridW + 280.0);
+    final double rawH = math.max(380.0, 110.0 + (bp * (140.0 * innerScale)));
+
+    const double targetW = a4LandscapeW - (marginX * 2);
+    const double targetH = a4LandscapeH - 180.0;
+    final double scale = math.min(targetW / rawW, targetH / rawH);
+    final double offsetX = marginX + (targetW - (rawW * scale)) / 2;
+    final double offsetY = 95.0 + (targetH - (rawH * scale)) / 2;
+
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale, scale);
+
+    final painter = CleanBatteryVisualPainter(
+      bs: bs,
+      bp: bp,
+      sysVolt: params.systemVoltage.toInt(),
+      isBangla: isBangla,
+    );
+    painter.paint(canvas, Size(rawW, rawH));
+    canvas.restore();
+
+    _drawCanvasFooter(
+      canvas,
+      a4LandscapeW,
+      a4LandscapeH,
+      bcsirLogoUiImage,
+      isBangla,
+    );
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(
+      a4LandscapeW.toInt(),
+      a4LandscapeH.toInt(),
+    );
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  // =========================================================================
+  // ক্যানভাস ফুটার রেন্ডারিং (বিসিএসআইআর ব্র্যান্ডিং)
+  // =========================================================================
+  static void _drawCanvasFooter(
+    Canvas canvas,
+    double w,
+    double h,
+    ui.Image? logo,
+    bool isBangla,
+  ) {
+    const double marginX = 50.0;
+    final double footerY = h - 65.0;
+
+    canvas.drawLine(
+      Offset(marginX, footerY),
+      Offset(w - marginX, footerY),
       Paint()
         ..color = const Color(0xFFCBD5E1)
         ..strokeWidth = 1.0,
     );
 
-    if (bcsirLogoUiImage != null) {
+    if (logo != null) {
       canvas.drawImageRect(
-        bcsirLogoUiImage,
-        Rect.fromLTWH(
-          0,
-          0,
-          bcsirLogoUiImage.width.toDouble(),
-          bcsirLogoUiImage.height.toDouble(),
-        ),
-        const Rect.fromLTWH(marginX, footerY + 12, 32, 32),
+        logo,
+        Rect.fromLTWH(0, 0, logo.width.toDouble(), logo.height.toDouble()),
+        Rect.fromLTWH(marginX, footerY + 12, 32, 32),
         Paint(),
       );
     }
@@ -373,7 +674,7 @@ class PdfReportService {
 
     _drawText(
       canvas,
-      Offset(marginX + (bcsirLogoUiImage != null ? 42 : 0), footerY + 18),
+      Offset(marginX + (logo != null ? 42 : 0), footerY + 18),
       instTitle,
       const TextStyle(
         color: Color(0xFF14532D),
@@ -384,7 +685,7 @@ class PdfReportService {
 
     _drawTextRight(
       canvas,
-      const Offset(width - marginX, footerY + 18),
+      Offset(w - marginX, footerY + 18),
       'SolEctricity Suite',
       const TextStyle(
         color: Color(0xFF64748B),
@@ -392,11 +693,6 @@ class PdfReportService {
         fontWeight: FontWeight.w600,
       ),
     );
-
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(width.toInt(), height.toInt());
-    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-    return byteData!.buffer.asUint8List();
   }
 
   static void _drawText(
@@ -425,6 +721,9 @@ class PdfReportService {
     tp.paint(canvas, Offset(rightOffset.dx - tp.width, rightOffset.dy));
   }
 
+  // =========================================================================
+  // সম্পূর্ণ রিপোর্ট জেনারেট (৪টি পূর্ণাঙ্গ পেইজ)
+  // =========================================================================
   static Future<Uint8List> generateReport({
     required SolarCalculationResult result,
     required SystemSizingParams params,
@@ -433,135 +732,90 @@ class PdfReportService {
   }) async {
     final pdf = pw.Document();
 
-    // ১. বিসিএসআইআর লোগো দুই ফরম্যাটে লোড করা (ui.Image ক্যানভাসের জন্য এবং MemoryImage পিডিএফের জন্য)
     ui.Image? bcsirLogoUi;
-    pw.MemoryImage? bcsirLogoPw;
     try {
       final logoData = await rootBundle.load(AppAssets.bcsirLogo);
       final bytes = logoData.buffer.asUint8List();
-      bcsirLogoPw = pw.MemoryImage(bytes);
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       bcsirLogoUi = frame.image;
     } catch (_) {}
 
-    // ২. পেজ ১-কে নিখুঁত ফ্লাটার টেক্সট-শেপিং ক্যানভাসে ছবি হিসেবে তৈরি করা
+    // 📄 পৃষ্ঠা ১: স্পেসিফিকেশন রিপোর্ট (A4 Portrait Full Bleed)
     final page1Bytes = await _renderPage1Image(
       result: result,
       params: params,
       isBangla: isBangla,
       bcsirLogoUiImage: bcsirLogoUi,
     );
-    final page1Image = pw.MemoryImage(page1Bytes);
-
-    // 📄 পৃষ্ঠা ১ যোগ করা (A4 Full-bleed image)
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.zero,
-        build: (pw.Context context) {
-          return pw.FullPage(
-            ignoreMargins: true,
-            child: pw.Image(page1Image, fit: pw.BoxFit.fill),
-          );
-        },
+        build: (context) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.Image(pw.MemoryImage(page1Bytes), fit: pw.BoxFit.fill),
+        ),
       ),
     );
 
-    // 🖼️ পৃষ্ঠা ২: ল্যান্ডস্কেপ ওয়্যারিং ডায়াগ্রাম
-    if (diagramImageBytes != null) {
-      final diagImg = pw.MemoryImage(diagramImageBytes);
+    // 🖼️ পৃষ্ঠা ২: ওভারঅল সিস্টেম ওয়্যারিং (A4 Landscape Full Bleed)
+    final page2Bytes = await _renderPage2SchematicImage(
+      result: result,
+      params: params,
+      isBangla: isBangla,
+      bcsirLogoUiImage: bcsirLogoUi,
+    );
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: pw.EdgeInsets.zero,
+        build: (context) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.Image(pw.MemoryImage(page2Bytes), fit: pw.BoxFit.fill),
+        ),
+      ),
+    );
+
+    // ⚡ পৃষ্ঠা ৩: পিভি অ্যারে বাস্তব স্ট্রিং ওয়্যারিং (A4 Landscape Full Bleed)
+    final page3Bytes = await _renderPage3PvDetailImage(
+      result: result,
+      isBangla: isBangla,
+      bcsirLogoUiImage: bcsirLogoUi,
+    );
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: pw.EdgeInsets.zero,
+        build: (context) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.Image(pw.MemoryImage(page3Bytes), fit: pw.BoxFit.fill),
+        ),
+      ),
+    );
+
+    // 🔋 পৃষ্ঠা ৪: ব্যাটারি ব্যাংক বাস্তব জাম্পার ওয়্যারিং (A4 Landscape Full Bleed)
+    if (params.systemType != SolarSystemType.gridTied &&
+        result.totalBatteries > 0) {
+      final page4Bytes = await _renderPage4BatteryDetailImage(
+        result: result,
+        params: params,
+        isBangla: isBangla,
+        bcsirLogoUiImage: bcsirLogoUi,
+      );
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.fromLTRB(28, 20, 28, 16),
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      isBangla
-                          ? 'SYSTEM SCHEMATIC WIRING BLUEPRINT'
-                          : 'SYSTEM SCHEMATIC WIRING BLUEPRINT',
-                      style: pw.TextStyle(
-                        color: PdfColors.green900,
-                        fontSize: 13,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.Text(
-                      'Engineering Schematic',
-                      style: const pw.TextStyle(
-                        color: PdfColors.grey600,
-                        fontSize: 9.5,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 8),
-                pw.Expanded(
-                  child: pw.Center(
-                    child: pw.Image(diagImg, fit: pw.BoxFit.contain),
-                  ),
-                ),
-                pw.SizedBox(height: 6),
-                _buildInstitutionalFooter(bcsirLogoPw, isBangla),
-              ],
-            );
-          },
+          margin: pw.EdgeInsets.zero,
+          build: (context) => pw.FullPage(
+            ignoreMargins: true,
+            child: pw.Image(pw.MemoryImage(page4Bytes), fit: pw.BoxFit.fill),
+          ),
         ),
       );
     }
 
     return pdf.save();
-  }
-
-  // পৃষ্ঠা ২ এর প্রাতিষ্ঠানিক ফুটার
-  static pw.Widget _buildInstitutionalFooter(
-    pw.MemoryImage? logo,
-    bool isBangla,
-  ) {
-    const String instText =
-        'Bangladesh Council of Scientific and Industrial Research (BCSIR), Ministry of Science and Technology';
-
-    return pw.Container(
-      margin: const pw.EdgeInsets.only(top: 6),
-      padding: const pw.EdgeInsets.only(top: 6),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(color: PdfColors.grey300, width: 0.8),
-        ),
-      ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
-        children: [
-          pw.Row(
-            children: [
-              if (logo != null) ...[
-                pw.Image(logo, width: 22, height: 22),
-                pw.SizedBox(width: 8),
-              ],
-              pw.Text(
-                instText,
-                style: pw.TextStyle(
-                  fontSize: 8.5,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.green900,
-                ),
-              ),
-            ],
-          ),
-          pw.Text(
-            'SolEctricity Design Suite',
-            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
-          ),
-        ],
-      ),
-    );
   }
 
   static Future<void> shareOrPrintReport(

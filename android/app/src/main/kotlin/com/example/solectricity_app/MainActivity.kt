@@ -1,4 +1,4 @@
-package com.example.solectricity_app
+package app.solectricity.shs
 
 import io.flutter.embedding.android.FlutterActivity
 

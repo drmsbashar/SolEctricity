@@ -19,6 +19,28 @@ class ApplianceItem {
     required this.hoursPerDay,
   });
 
+  ApplianceItem copyWith({
+    String? id,
+    String? categoryKey,
+    String? nameBn,
+    String? nameEn,
+    bool? isAC,
+    double? watt,
+    int? quantity,
+    double? hoursPerDay,
+  }) {
+    return ApplianceItem(
+      id: id ?? this.id,
+      categoryKey: categoryKey ?? this.categoryKey,
+      nameBn: nameBn ?? this.nameBn,
+      nameEn: nameEn ?? this.nameEn,
+      isAC: isAC ?? this.isAC,
+      watt: watt ?? this.watt,
+      quantity: quantity ?? this.quantity,
+      hoursPerDay: hoursPerDay ?? this.hoursPerDay,
+    );
+  }
+
   // সংযুক্ত ক্ষমতা (Connected Power in Watts)
   double get totalWatt => watt * quantity;
 
