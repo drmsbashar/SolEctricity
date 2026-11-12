@@ -747,11 +747,12 @@ class _FinancialAnalysisScreenState extends State<FinancialAnalysisScreen> {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              overflow: TextOverflow.visible,
               style: TextStyle(
                 fontSize: 9.5,
-                color: isDark ? Colors.white38 : Colors.grey.shade600,
+                height: 1.25,
+                color: isDark ? Colors.white60 : Colors.grey.shade700,
               ),
             ),
           ],

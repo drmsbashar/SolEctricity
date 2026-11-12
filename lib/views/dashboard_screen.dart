@@ -281,9 +281,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
-                            shadows: const [
-                              Shadow(color: Colors.black45, blurRadius: 4),
-                            ],
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -308,15 +305,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                             fontSize: 13.5,
                             fontWeight: FontWeight.bold,
                             height: 1.35,
-                            shadows: [
-                              Shadow(
-                                color: isDark
-                                    ? Colors.black87
-                                    : Colors.white.withValues(alpha: 0.9),
-                                blurRadius: 4,
-                                offset: const Offset(1, 1),
-                              ),
-                            ],
                           ),
                         ),
                       ],
